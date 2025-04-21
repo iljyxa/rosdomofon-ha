@@ -1,0 +1,10 @@
+{
+  "domain": "rosdomofon",
+  "name": "Росдомофон",
+  "version": "0.0.1",
+  "documentation": "https://github.com/iljyxa/rosdomofon-ha",
+  "requirements": ["requests"],
+  "dependencies": [],
+  "codeowners": ["@iljyxa"],
+  "iot_class": "cloud_polling"
+}
