@@ -3,6 +3,7 @@
   "name": "Росдомофон",
   "version": "0.0.1",
   "documentation": "https://github.com/iljyxa/rosdomofon-ha",
+  "issue_tracker": "https://github.com/iljyxa/rosdomofon-ha/issues",
   "requirements": ["requests"],
   "dependencies": [],
   "codeowners": ["@iljyxa"],
