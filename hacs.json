@@ -1,6 +1,7 @@
 {
-  "name": "Rosdomofon",
+  "name": "Росдомофон",
   "homeassistant": "2023.9",
   "country": ["RU"],
-  "render_readme": false
+  "domains": ["camera"],
+  "render_readme": true
 }
