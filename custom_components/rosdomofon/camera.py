@@ -1,42 +1,115 @@
+import logging
+
+import requests
 from homeassistant.components.camera import Camera
+from homeassistant.components.ffmpeg import async_get_image
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-import requests
+
 from .const import *
 
+_LOGGER = logging.getLogger(__name__)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
-    """Добавляем все камеры."""
-    token = entry.data["token_data"]["access_token"]
-    cameras = await hass.async_add_executor_job(_fetch_cameras, token)
-    entities = [RosdomofonCamera(camera, token) for camera in cameras]
-    async_add_entities(entities)
+    """Настройка камер с использованием FFmpeg."""
+    token_data = entry.data["token_data"]
+
+    try:
+        cameras = await hass.async_add_executor_job(
+            _fetch_cameras, token_data["access_token"]
+        )
+    except Exception as e:
+        _LOGGER.error(f"Ошибка получения камер: {e}")
+        return
+
+    entities = []
+
+    for camera in cameras:
+        try:
+            rtsp_url = await hass.async_add_executor_job(
+                _get_rtsp_url, camera["id"], token_data["access_token"]
+            )
+            if rtsp_url:
+                entities.append(
+                    RosdomofonCamera(
+                        hass=hass,
+                        camera_id=camera["id"],
+                        name=camera.get("name", f"Камера {camera['id']}"),
+                        rtsp_url=rtsp_url,
+                        token=token_data["access_token"]
+                    )
+                )
+        except Exception as e:
+            _LOGGER.error(f"Ошибка создания камеры {camera.get('id')}: {e}")
+
+    if entities:
+        async_add_entities(entities)
+
 
 def _fetch_cameras(token):
-    """Получаем список камер и их RTSP-ссылки."""
+    """Получение списка камер."""
     headers = {"Authorization": f"Bearer {token}"}
-    cameras_list = requests.get(CAMERAS_LIST_URL, headers=headers).json()
-    return [
-        {
-            "id": cam["id"],
-            "name": cam.get("name", f"Камера {cam['id']}"),
-            "rtsp_url": requests.get(
-                CAMERA_RTSP_URL.format(camera_id=cam["id"]), headers=headers
-            ).json().get("uri"),
-        }
-        for cam in cameras_list
-    ]
+    response = requests.get(
+        CAMERAS_LIST_URL,
+        headers=headers,
+        timeout=10
+    )
+    return response.json() if response.status_code == 200 else []
+
+
+def _get_rtsp_url(camera_id, token):
+    """Получение RTSP ссылки."""
+    headers = {"Authorization": f"Bearer {token}"}
+    response = requests.get(
+        CAMERA_RTSP_URL.format(camera_id=camera_id),
+        headers=headers,
+        timeout=10
+    )
+    return response.json().get("uri") if response.status_code == 200 else None
+
 
 class RosdomofonCamera(Camera):
-    def __init__(self, camera_data, token):
+    """Камера с FFmpeg трансляцией."""
+
+
+    def __init__(self, hass: HomeAssistant, camera_id: str, name: str, rtsp_url: str, token: str):
+        """Инициализация камеры."""
         super().__init__()
-        self._id = camera_data["id"]
-        self._name = camera_data["name"]
-        self._rtsp_url = camera_data["rtsp_url"]
+        self.hass = hass
+        self._camera_id = camera_id
+        self._name = name
+        self._rtsp_url = rtsp_url
         self._token = token
+        self._attr_unique_id = f"rosdomofon_{camera_id}"
+        self._attr_extra_state_attributes = {
+            "rtsp_url": rtsp_url,
+            "camera_id": camera_id,
+            "token": token[:8] + "..."  # Для безопасности
+        }
+
 
     @property
     def name(self):
+        """Возвращает имя камеры."""
         return self._name
 
-    async def stream_source(self):
+    async def async_camera_image(self, width=None, height=None):
+        """Улучшенный метод с обработкой ошибок RTSP."""
+        try:
+            _LOGGER.debug(f"Попытка получить изображение с {self._rtsp_url}")
+            return await async_get_image(
+                self.hass,
+                self._rtsp_url,
+                extra_cmd="-rtsp_transport tcp -timeout 5000000",
+                width=width,
+                height=height
+            )
+        except Exception as e:
+            _LOGGER.warning(f"Ошибка получения изображения: {str(e)}")
+            return None
+
+
+    async def stream_source(self) -> str | None:
+        """Возвращает источник для стриминга."""
         return self._rtsp_url

@@ -2,10 +2,11 @@
   "domain": "rosdomofon",
   "name": "Росдомофон",
   "version": "1.0.0",
+  "config_flow": true,
   "documentation": "https://github.com/iljyxa/rosdomofon-ha",
   "issue_tracker": "https://github.com/iljyxa/rosdomofon-ha/issues",
+  "dependencies": ["ffmpeg"],
   "requirements": ["requests"],
-  "dependencies": [],
   "codeowners": ["@iljyxa"],
   "iot_class": "cloud_polling"
 }
