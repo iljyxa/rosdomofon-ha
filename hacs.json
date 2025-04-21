@@ -1,0 +1,6 @@
+{
+  "name": "Rosdomofon",
+  "homeassistant": "2023.9",
+  "country": ["RU"],
+  "render_readme": false
+}
