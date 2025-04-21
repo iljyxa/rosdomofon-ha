@@ -3,5 +3,7 @@
   "homeassistant": "2023.9",
   "country": ["RU"],
   "domains": ["camera"],
-  "render_readme": true
+  "render_readme": true,
+  "persistent_directory": "custom_components/rosdomofon",
+  "zip_release": false
 }
