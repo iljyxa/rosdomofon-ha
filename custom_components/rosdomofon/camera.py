@@ -5,46 +5,42 @@ from homeassistant.components.camera import Camera
 from homeassistant.components.ffmpeg import async_get_image
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import *
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
-    """Настройка камер с использованием FFmpeg."""
-    token_data = entry.data["token_data"]
+async def async_setup_entry(hass, entry, async_add_entities):
+    """Настройка камер с автоматическим обновлением токена."""
+    token_manager = TokenManager(hass, entry)
+    if not await token_manager.ensure_valid_token():
+        return
 
     try:
         cameras = await hass.async_add_executor_job(
-            _fetch_cameras, token_data["access_token"]
+            lambda: _fetch_cameras(token_manager.access_token)
         )
     except Exception as e:
         _LOGGER.error(f"Ошибка получения камер: {e}")
         return
 
     entities = []
-
     for camera in cameras:
-        try:
-            rtsp_url = await hass.async_add_executor_job(
-                _get_rtsp_url, camera["id"], token_data["access_token"]
-            )
-            if rtsp_url:
-                entities.append(
-                    RosdomofonCamera(
-                        hass=hass,
-                        camera_id=camera["id"],
-                        name=camera.get("name", f"Камера {camera['id']}"),
-                        rtsp_url=rtsp_url,
-                        token=token_data["access_token"]
-                    )
-                )
-        except Exception as e:
-            _LOGGER.error(f"Ошибка создания камеры {camera.get('id')}: {e}")
+        rtsp_url = await hass.async_add_executor_job(
+            lambda: _get_rtsp_url(camera["id"], token_manager.access_token)
+        )
+        if rtsp_url:
+            entities.append(RosdomofonCamera(
+                hass=hass,
+                token_manager=token_manager,
+                camera_id=camera["id"],
+                name=camera.get("name", f"Камера {camera['id']}"),
+                rtsp_url=rtsp_url
+            ))
 
-    if entities:
-        async_add_entities(entities)
+    async_add_entities(entities)
 
 
 def _fetch_cameras(token):

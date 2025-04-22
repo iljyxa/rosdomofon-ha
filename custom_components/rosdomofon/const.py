@@ -3,6 +3,8 @@ SMS_REQUEST_URL = f"{BASE_URL}/abonents-service/api/v1/abonents/{{phone}}/sms"
 TOKEN_URL = f"{BASE_URL}/authserver-service/oauth/token"
 CAMERAS_LIST_URL = f"{BASE_URL}/abonents-service/api/v3/abonents/cameras"
 CAMERA_RTSP_URL = f"{BASE_URL}/cameras-service/api/v1/cameras/{{camera_id}}"
+LOCKS_LIST = f"{BASE_URL}/abonents-service/api/v2/abonents/keys"
+LOCK_UNLOCK = f"{BASE_URL}/rdas-service/api/v1/rdas/{{adapter_id}}/activate_key"
 
 GRANT_TYPE_MOBILE = "mobile"
 GRANT_TYPE_REFRESH = "refresh_token"
