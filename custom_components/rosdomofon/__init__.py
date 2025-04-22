@@ -1,20 +1,16 @@
-from datetime import timedelta
 import logging
-
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from custom_components.rosdomofon.token_manager import TokenManager
 
 _LOGGER = logging.getLogger(__name__)
 
+
 def __init__(self, device_type: int):
     self._attr_icon = {
         1: "mdi:door-closed",  # Дверь
-        2: "mdi:gate",         # Шлагбаум
-        3: "mdi:garage",       # Ворота
-        4: "mdi:fence"         # Калитка
+        2: "mdi:gate",  # Шлагбаум
+        3: "mdi:garage",  # Ворота
+        4: "mdi:fence"  # Калитка
     }.get(device_type, "mdi:lock")
 
 

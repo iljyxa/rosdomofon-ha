@@ -1,8 +1,8 @@
-import time
 import logging
-import requests
+import time
 from typing import Optional, Dict
-from .const import *
+from custom_components.rosdomofon.const import *
+import requests
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,15 +26,15 @@ class TokenManager:
         """Проверяет, истек ли срок действия токена."""
         if 'timestamp' not in self._token_data:
             return True
+
         return (time.time() - self._token_data['timestamp']) > (
-                    self._token_data['expires_in'] - 60)  # Обновляем за 60 сек до истечения
+                self._token_data['expires_in'] - 60)  # Обновляем за 60 сек до истечения
 
     async def _refresh_token(self) -> bool:
         """Обновляет токен с использованием refresh_token."""
         try:
-            new_token = await self.hass.async_add_executor_job(
-                self._request_token_refresh
-            )
+            new_token = await self.hass.async_add_executor_job(self._request_token_refresh)
+
             if new_token:
                 self._token_data = new_token
                 self._token_data['timestamp'] = int(time.time())
@@ -59,7 +59,7 @@ class TokenManager:
         }
 
         response = requests.post(
-            TOKEN_REQUEST_URL,
+            TOKEN_URL,
             data=data,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             timeout=10
@@ -70,6 +70,7 @@ class TokenManager:
             return response.json()
 
         _LOGGER.error(f"Ошибка обновления токена: {response.status_code} {response.text}")
+
         return None
 
     @property

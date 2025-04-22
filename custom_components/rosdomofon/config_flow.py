@@ -1,11 +1,12 @@
+import logging
+import time
+
+import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import aiohttp_client
-import voluptuous as vol
-import logging
-import time
-from .token_manager import TokenManager  # Добавляем импорт
-from .const import *
+
+from custom_components.rosdomofon.const import *
 
 _LOGGER = logging.getLogger(__name__)
 

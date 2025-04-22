@@ -1,13 +1,10 @@
 import logging
-from typing import Any
-from homeassistant.components.lock import LockEntity
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-import requests
 
-from .const import *
-from .token_manager import TokenManager
+import requests
+from homeassistant.components.lock import LockEntity
+
+from custom_components.rosdomofon.const import *
+from custom_components.rosdomofon.token_manager import TokenManager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,6 +51,16 @@ def _fetch_keys(access_token: str) -> list[dict]:
     return response.json()
 
 
+def _get_device_icon(device_type):
+    icons = {
+        1: "mdi:door-closed",
+        2: "mdi:gate",
+        3: "mdi:garage",
+        4: "mdi:fence"
+    }
+    return icons.get(device_type, "mdi:lock")
+
+
 class RosdomofonLock(LockEntity):
     def __init__(self, hass, token_manager, adapter_id, relay, device_type):
         self.hass = hass
@@ -61,7 +68,7 @@ class RosdomofonLock(LockEntity):
         self._adapter_id = adapter_id
         self._relay = relay
         self._attr_name = self._get_device_name(device_type)
-        self._attr_icon = self._get_device_icon(device_type)
+        self._attr_icon = _get_device_icon(device_type)
         self._attr_unique_id = f"rosdomofon_{adapter_id}_{relay}"
 
     async def async_unlock(self, **kwargs):
@@ -86,21 +93,12 @@ class RosdomofonLock(LockEntity):
 
     def _get_device_name(self, device_type):
         names = {
-            1: "Дверь подъезда",
+            1: "Дверь",
             2: "Шлагбаум",
             3: "Ворота",
             4: "Калитка"
         }
         return names.get(device_type, f"Устройство {self._adapter_id}")
-
-    def _get_device_icon(self, device_type):
-        icons = {
-            1: "mdi:door-closed",
-            2: "mdi:gate",
-            3: "mdi:garage",
-            4: "mdi:fence"
-        }
-        return icons.get(device_type, "mdi:lock")
 
 
 def _activate_key(access_token: str, adapter_id: str, relay: int) -> bool:

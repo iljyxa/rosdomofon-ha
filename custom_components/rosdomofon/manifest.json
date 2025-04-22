@@ -5,8 +5,14 @@
   "config_flow": true,
   "documentation": "https://github.com/iljyxa/rosdomofon-ha",
   "issue_tracker": "https://github.com/iljyxa/rosdomofon-ha/issues",
-  "dependencies": ["ffmpeg"],
-  "requirements": ["requests"],
-  "codeowners": ["@iljyxa"],
+  "dependencies": [
+    "ffmpeg"
+  ],
+  "requirements": [
+    "requests"
+  ],
+  "codeowners": [
+    "@iljyxa"
+  ],
   "iot_class": "cloud_polling"
 }
