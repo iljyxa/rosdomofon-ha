@@ -95,18 +95,18 @@ class RosdomofonConfigFlow(config_entries.ConfigFlow, domain="rosdomofon"):
         return False
 
     async def _get_token(self, phone: str, sms_code: str) -> dict | None:
-        """Получение токена с обработкой ошибок."""
         try:
             session = aiohttp_client.async_get_clientsession(self.hass)
             data = {
-                "grant_type": "mobile",
-                "client_id": "abonent",
+                "grant_type": GRANT_TYPE_MOBILE,
+                "client_id": CLIENT_ID,
                 "phone": phone,
-                "sms_code": sms_code
+                "sms_code": sms_code,
+                "company": COMPANY_NAME
             }
 
             async with session.post(
-                    TOKEN_URL,
+                    TOKEN_REQUEST_URL,
                     data=data,
                     headers={"Content-Type": "application/x-www-form-urlencoded"},
                     timeout=10
@@ -115,7 +115,7 @@ class RosdomofonConfigFlow(config_entries.ConfigFlow, domain="rosdomofon"):
                     token_data = await response.json()
                     _LOGGER.debug("Токен получен успешно")
                     return token_data
-                _LOGGER.error(f"Ошибка токена: {response.status}")
+                _LOGGER.error(f"Токен не был получен: {response} {response.status}")
         except Exception as e:
             _LOGGER.error(f"Ошибка получения токена: {e}")
         return None
