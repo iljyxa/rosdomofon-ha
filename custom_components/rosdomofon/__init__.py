@@ -56,7 +56,7 @@ async def async_setup_entry(hass, entry) -> bool:
             # Находим share_manager для любого активного entry
             mgr = None
             for _eid, data in hass.data.get(DOMAIN, {}).items():
-                if isinstance(data, dict) and "share_manager" in 
+                if isinstance(data, dict) and "share_manager" in data:
                     mgr = data["share_manager"]
                     break
 
