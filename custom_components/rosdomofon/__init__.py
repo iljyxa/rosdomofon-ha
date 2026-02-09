@@ -28,7 +28,7 @@ async def async_setup_entry(hass, entry):
     }
 
     # Настраиваем платформы
-    await hass.config_entries.async_forward_entry_setups(entry, ["camera", "lock"])
+    await hass.config_entries.async_forward_entry_setups(entry, ["lock"])
     return True
 
 
