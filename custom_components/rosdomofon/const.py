@@ -22,3 +22,7 @@ COMPANY_NAME = ""
 # Валидация номера телефона РФ (11 цифр, начинается с 7)
 PHONE_LENGTH = 11
 PHONE_PREFIX = "7"
+
+# Ссылки для гостевого доступа (Share Link)
+SHARE_LINK_DEFAULT_TTL_HOURS = 12
+SHARE_LINK_WEBHOOK_PREFIX = "rosdomofon_share_"

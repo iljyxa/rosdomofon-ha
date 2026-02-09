@@ -1,0 +1,42 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Rosdomofon",
+        "description": "Enter the Russian phone number registered in Rosdomofon.\n\nFormat: {note}",
+        "data": {
+          "phone": "Phone number"
+        }
+      },
+      "sms": {
+        "title": "Phone confirmation",
+        "description": "Enter the SMS code sent to {phone}.",
+        "data": {
+          "sms_code": "SMS code"
+        }
+      }
+    },
+    "error": {
+      "invalid_phone_length": "Phone number must contain 11 digits.",
+      "invalid_phone_prefix": "Phone number must start with 7 (format 7XXXXXXXXXX).",
+      "sms_failed": "Failed to send SMS. Please check the phone number and try again.",
+      "invalid_code": "Invalid SMS code. Please try again."
+    }
+  },
+  "services": {
+    "generate_share_link": {
+      "name": "Generate guest link",
+      "description": "Generates a temporary link for a guest to open a lock.",
+      "fields": {
+        "entity_id": {
+          "name": "Lock",
+          "description": "Entity ID of the Rosdomofon lock."
+        },
+        "ttl_hours": {
+          "name": "Validity period (hours)",
+          "description": "How many hours the link will be active (default 12)."
+        }
+      }
+    }
+  }
+}

@@ -82,11 +82,11 @@ class RosdomofonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Required(
-                    "phone",
-                    description={"suggested_value": "+7 (___) ___-__-__"},
-                ): str,
+                vol.Required("phone"): str,
             }),
+            description_placeholders={
+                "note": "+7 (XXX) XXX-XX-XX, можно вводить в свободном формате — пробелы и символы будут удалены автоматически",
+            },
             errors=errors,
         )
 

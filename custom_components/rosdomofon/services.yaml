@@ -1,0 +1,23 @@
+generate_share_link:
+  name: "Создать гостевую ссылку"
+  description: "Генерирует временную ссылку для открытия замка гостем."
+  fields:
+    entity_id:
+      name: "Замок"
+      description: "Entity ID замка Росдомофон."
+      required: true
+      selector:
+        entity:
+          domain: lock
+          integration: rosdomofon
+    ttl_hours:
+      name: "Срок действия (часы)"
+      description: "Сколько часов ссылка будет активна."
+      required: false
+      default: 12
+      selector:
+        number:
+          min: 0.5
+          max: 168
+          step: 0.5
+          unit_of_measurement: "ч"
