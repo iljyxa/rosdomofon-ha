@@ -105,7 +105,10 @@ class RosdomofonShareButton(ButtonEntity):
                 SHARE_LINK_DEFAULT_TTL_HOURS,
             )
         except ExternalURLNotAvailable:
-            self.hass.components.persistent_notification.async_create(
+            from homeassistant.components import persistent_notification
+
+            persistent_notification.async_create(
+                self.hass,
                 "Невозможно создать гостевую ссылку.\n\n"
                 "В Home Assistant не настроен доступ извне. "
                 "Настройте **External URL** в разделе "
@@ -118,7 +121,10 @@ class RosdomofonShareButton(ButtonEntity):
             return
 
         ttl = int(SHARE_LINK_DEFAULT_TTL_HOURS)
-        self.hass.components.persistent_notification.async_create(
+        from homeassistant.components import persistent_notification
+
+        persistent_notification.async_create(
+            self.hass,
             f"Ссылка для открытия **{self._attr_name.replace('Поделиться: ', '')}** "
             f"(действительна {ttl} ч):\n\n"
             f"`{url}`\n\n"
