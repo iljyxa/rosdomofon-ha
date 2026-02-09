@@ -9,6 +9,7 @@
 import logging
 
 import voluptuous as vol
+from homeassistant.components import persistent_notification
 from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN, SHARE_LINK_DEFAULT_TTL_HOURS
@@ -55,7 +56,7 @@ async def async_setup_entry(hass, entry) -> bool:
             # Находим share_manager для любого активного entry
             mgr = None
             for _eid, data in hass.data.get(DOMAIN, {}).items():
-                if isinstance(data, dict) and "share_manager" in data:
+                if isinstance(data, dict) and "share_manager" in 
                     mgr = data["share_manager"]
                     break
 
@@ -66,17 +67,19 @@ async def async_setup_entry(hass, entry) -> bool:
             try:
                 url = mgr.generate(entity_id, ttl_hours)
             except ExternalURLNotAvailable:
-                hass.components.persistent_notification.async_create(
+                persistent_notification.async_create(
+                    hass,
                     "Невозможно создать гостевую ссылку: "
                     "в Home Assistant не настроен внешний доступ. "
                     "Настройте External URL или подключите Home Assistant Cloud (Nabu Casa).",
                     title="Росдомофон: внешний доступ не настроен",
-                    notification_id=f"rosdomofon_no_external_url",
+                    notification_id="rosdomofon_no_external_url",
                 )
                 return
 
             ttl_text = f"{int(ttl_hours)} ч" if ttl_hours == int(ttl_hours) else f"{ttl_hours} ч"
-            hass.components.persistent_notification.async_create(
+            persistent_notification.async_create(
+                hass,
                 f"Ссылка для открытия **{entity_id}** "
                 f"(действительна {ttl_text}):\n\n"
                 f"`{url}`\n\n"

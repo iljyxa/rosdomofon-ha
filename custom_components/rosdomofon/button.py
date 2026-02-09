@@ -1,5 +1,4 @@
-"""
-Платформа кнопок (button) для интеграции Росдомофон.
+"""Платформа кнопок (button) для интеграции Росдомофон.
 
 Для каждого замка создаётся кнопка «Поделиться»,
 которая генерирует временную гостевую ссылку для открытия.
@@ -9,8 +8,10 @@ import logging
 
 import requests
 from homeassistant.components.button import ButtonEntity
+from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
@@ -29,11 +30,6 @@ _DEVICE_NAMES: dict[int, str] = {
     3: "Ворота",
     4: "Калитка",
 }
-
-
-# ---------------------------------------------------------------------------
-# Настройка платформы
-# ---------------------------------------------------------------------------
 
 
 async def async_setup_entry(
@@ -70,11 +66,6 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-# ---------------------------------------------------------------------------
-# Entity
-# ---------------------------------------------------------------------------
-
-
 class RosdomofonShareButton(ButtonEntity):
     """Кнопка «Поделиться» для замка Росдомофон."""
 
@@ -97,35 +88,26 @@ class RosdomofonShareButton(ButtonEntity):
         self._attr_unique_id = f"rosdomofon_share_{adapter_id}_{relay}"
 
     async def async_press(self) -> None:
-        """Нажатие кнопки: генерация гостевой ссылки или уведомление об ошибке."""
-        # Проверка внешнего URL перед генерацией
+        """Нажатие кнопки: генерация гостевой ссылки или ошибка."""
         try:
             url = self._share_manager.generate(
                 self._lock_entity_id,
                 SHARE_LINK_DEFAULT_TTL_HOURS,
             )
         except ExternalURLNotAvailable:
-            from homeassistant.components import persistent_notification
-
-            persistent_notification.async_create(
-                self.hass,
-                "Невозможно создать гостевую ссылку.\n\n"
-                "В Home Assistant не настроен доступ извне. "
-                "Настройте **External URL** в разделе "
-                "Настройки → Система → Сеть, "
-                "либо подключите **Home Assistant Cloud (Nabu Casa)**.",
-                title="Росдомофон: внешний доступ не настроен ⚠️",
-                notification_id="rosdomofon_no_external_url",
+            raise HomeAssistantError(
+                "Невозможно создать гостевую ссылку: "
+                "в Home Assistant не настроен доступ извне. "
+                "Настройте External URL (Настройки → Система → Сеть) "
+                "или подключите Home Assistant Cloud (Nabu Casa)."
             )
-            _LOGGER.warning("Внешний URL не настроен, ссылку создать невозможно")
-            return
 
         ttl = int(SHARE_LINK_DEFAULT_TTL_HOURS)
-        from homeassistant.components import persistent_notification
+        device_label = self._attr_name.replace("Поделиться: ", "")
 
         persistent_notification.async_create(
             self.hass,
-            f"Ссылка для открытия **{self._attr_name.replace('Поделиться: ', '')}** "
+            f"Ссылка для открытия **{device_label}** "
             f"(действительна {ttl} ч):\n\n"
             f"`{url}`\n\n"
             f"Скопируйте ссылку и отправьте гостю.",
@@ -133,11 +115,6 @@ class RosdomofonShareButton(ButtonEntity):
             notification_id=f"rosdomofon_share_{self._lock_entity_id}",
         )
         _LOGGER.info("Создана гостевая ссылка для %s", self._lock_entity_id)
-
-
-# ---------------------------------------------------------------------------
-# Синхронный HTTP-запрос (повториспользуется тот же API что и в lock.py)
-# ---------------------------------------------------------------------------
 
 
 def _fetch_keys(access_token: str) -> list[dict]:
