@@ -6,6 +6,7 @@
 
 import logging
 import inspect
+from datetime import timedelta
 import re
 from typing import Any
 
@@ -38,11 +39,15 @@ async def _sign_path_compat(hass: HomeAssistant, path: str) -> str:
         )
         return path
 
+    if "http.auth" not in hass.data:
+        # In tests or minimal setups auth storage is not initialized.
+        return path
+
     try:
         result = _ha_async_sign_path(hass, path)
     except TypeError:
         # Some versions require expiration arg.
-        result = _ha_async_sign_path(hass, path, None)
+        result = _ha_async_sign_path(hass, path, timedelta(minutes=5))
     except Exception as exc:
         _LOGGER.warning(
             "Failed to sign path, falling back to unsigned URL: %s",
