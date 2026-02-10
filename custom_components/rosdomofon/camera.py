@@ -43,6 +43,12 @@ async def _sign_path_compat(hass: HomeAssistant, path: str) -> str:
     except TypeError:
         # Some versions require expiration arg.
         result = _ha_async_sign_path(hass, path, None)
+    except Exception as exc:
+        _LOGGER.warning(
+            "Failed to sign path, falling back to unsigned URL: %s",
+            exc,
+        )
+        return path
 
     if inspect.isawaitable(result):
         return await result

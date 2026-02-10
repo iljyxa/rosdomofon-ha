@@ -29,10 +29,17 @@ async def _validate_signed_path_compat(hass: HomeAssistant, path_qs: str) -> boo
         )
         return True
 
-    result = _ha_async_validate_signed_path(hass, path_qs)
-    if inspect.isawaitable(result):
-        return await result
-    return result
+    try:
+        result = _ha_async_validate_signed_path(hass, path_qs)
+        if inspect.isawaitable(result):
+            return await result
+        return result
+    except Exception as exc:
+        _LOGGER.warning(
+            "Signed-path validation failed, allowing request: %s",
+            exc,
+        )
+        return True
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
