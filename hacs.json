@@ -4,11 +4,6 @@
   "country": [
     "RU"
   ],
-  "domains": [
-    "camera",
-    "lock",
-    "button"
-  ],
   "render_readme": true,
   "persistent_directory": "custom_components/rosdomofon",
   "zip_release": false
