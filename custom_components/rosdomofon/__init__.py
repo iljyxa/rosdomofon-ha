@@ -1,3 +1,4 @@
+from homeassistant.exceptions import ConfigEntryNotReady
 """
 Интеграция Росдомофон для Home Assistant.
 
@@ -14,11 +15,12 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN, SHARE_LINK_DEFAULT_TTL_HOURS
 from .share import ExternalURLNotAvailable, ShareLinkManager
+from .stream_proxy import setup_stream_proxy
 from .token_manager import TokenManager
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[str] = ["lock", "button"]
+PLATFORMS: list[str] = ["lock", "button", "camera"]
 
 # Схема сервиса генерации гостевой ссылки
 SERVICE_GENERATE_LINK = "generate_share_link"
@@ -36,7 +38,7 @@ async def async_setup_entry(hass, entry) -> bool:
 
     if not await token_manager.ensure_valid_token():
         _LOGGER.error("Не удалось обновить токен при старте")
-        return False
+        raise ConfigEntryNotReady("Не удалось обновить токен при старте")
 
     share_manager = ShareLinkManager(hass)
 
@@ -45,6 +47,11 @@ async def async_setup_entry(hass, entry) -> bool:
         "token_manager": token_manager,
         "share_manager": share_manager,
     }
+
+    # Регистрируем прокси для HLS потоков (один раз на домен)
+    if "_stream_proxy_registered" not in hass.data[DOMAIN]:
+        setup_stream_proxy(hass)
+        hass.data[DOMAIN]["_stream_proxy_registered"] = True
 
     # Регистрируем сервис генерации ссылки (один раз на домен)
     if not hass.services.has_service(DOMAIN, SERVICE_GENERATE_LINK):

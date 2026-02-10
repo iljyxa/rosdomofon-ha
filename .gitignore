@@ -28,6 +28,7 @@ Thumbs.db
 .vscode/
 
 # Local debug helpers
+VC
 main.py
 token
 requirements.txt

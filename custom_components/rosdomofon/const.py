@@ -23,6 +23,10 @@ COMPANY_NAME = ""
 PHONE_LENGTH = 11
 PHONE_PREFIX = "7"
 
+# Эндпоинты камер
+CAMERAS_LIST_URL = f"{BASE_URL}/abonents-service/api/v2/abonents/cameras"
+CAMERA_DETAILS_URL = f"{BASE_URL}/cameras-service/api/v1/cameras/{{camera_id}}"
+
 # Ссылки для гостевого доступа (Share Link)
 SHARE_LINK_DEFAULT_TTL_HOURS = 12
 SHARE_LINK_WEBHOOK_PREFIX = "rosdomofon_share_"

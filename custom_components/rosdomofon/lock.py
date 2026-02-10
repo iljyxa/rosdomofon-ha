@@ -63,8 +63,14 @@ async def async_setup_entry(
         keys = await hass.async_add_executor_job(
             _fetch_keys, token_manager.access_token
         )
-    except Exception as exc:
-        _LOGGER.error("Ошибка получения ключей: %s", exc)
+    except requests.RequestException as exc:
+        _LOGGER.error("Ошибка получения ключей (сетевая ошибка): %s", exc)
+        return
+    except ValueError as exc:
+        _LOGGER.error("Некорректный ответ API при получении ключей: %s", exc)
+        return
+    except Exception as exc:  # safety net
+        _LOGGER.exception("Неожиданная ошибка при получении ключей: %s", exc)
         return
 
     entities = [
