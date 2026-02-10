@@ -10,6 +10,7 @@ import inspect
 import requests
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
+from homeassistant.core import HomeAssistant
 try:
     from homeassistant.components.http import async_validate_signed_path as _ha_async_validate_signed_path  # type: ignore
 except ImportError:
