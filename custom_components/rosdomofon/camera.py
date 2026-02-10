@@ -51,7 +51,14 @@ async def _sign_path_compat(hass: HomeAssistant, path: str) -> str:
         return path
 
     if inspect.isawaitable(result):
-        return await result
+        try:
+            return await result
+        except Exception as exc:
+            _LOGGER.warning(
+                "Failed to sign path, falling back to unsigned URL: %s",
+                exc,
+            )
+            return path
     return result
 
 # Эндпоинты API для получения списка камер и детальной информации
