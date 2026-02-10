@@ -5,23 +5,39 @@
 """
 
 import logging
+import inspect
 import re
 from typing import Any
 
 import requests
 from homeassistant.components.camera import Camera, CameraEntityFeature
 try:
-    from homeassistant.components.http import async_sign_path  # type: ignore
+    from homeassistant.components.http import async_sign_path as _ha_async_sign_path  # type: ignore
 except ImportError:
     try:
-        from homeassistant.components.http.auth import async_sign_path  # type: ignore
+        from homeassistant.components.http.auth import async_sign_path as _ha_async_sign_path  # type: ignore
     except ImportError:
-        def async_sign_path(_hass, path: str) -> str:  # type: ignore
-            _LOGGER.warning(
-                "Signed-path helper is unavailable in this Home Assistant version; "
-                "stream proxy URL will be unsigned."
-            )
-            return path
+        _ha_async_sign_path = None
+
+
+async def _sign_path_compat(hass: HomeAssistant, path: str) -> str:
+    """Sign path across HA versions. Falls back to unsigned path."""
+    if _ha_async_sign_path is None:
+        _LOGGER.warning(
+            "Signed-path helper is unavailable in this Home Assistant version; "
+            "stream proxy URL will be unsigned."
+        )
+        return path
+
+    try:
+        result = _ha_async_sign_path(hass, path)
+    except TypeError:
+        # Some versions require expiration arg.
+        result = _ha_async_sign_path(hass, path, None)
+
+    if inspect.isawaitable(result):
+        return await result
+    return result
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -179,7 +195,7 @@ class RosdomofonCamera(Camera):
 
         # path сейчас: live/39167.m3u8
         proxy_path = f"/api/rosdomofon/stream/{self._camera_id}/{host}/{path}"
-        signed_path = async_sign_path(self.hass, proxy_path)
+        signed_path = await _sign_path_compat(self.hass, proxy_path)
         proxy_url = f"{base_url}{signed_path}"
 
         _LOGGER.debug(

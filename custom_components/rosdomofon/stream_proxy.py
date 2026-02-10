@@ -5,22 +5,33 @@
 """
 
 import logging
+import inspect
 
 import requests
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 try:
-    from homeassistant.components.http import async_validate_signed_path  # type: ignore
+    from homeassistant.components.http import async_validate_signed_path as _ha_async_validate_signed_path  # type: ignore
 except ImportError:
     try:
-        from homeassistant.components.http.auth import async_validate_signed_path  # type: ignore
+        from homeassistant.components.http.auth import async_validate_signed_path as _ha_async_validate_signed_path  # type: ignore
     except ImportError:
-        async def async_validate_signed_path(_hass, _path_qs: str) -> bool:  # type: ignore
-            _LOGGER.warning(
-                "Signed-path validation is unavailable in this Home Assistant version; "
-                "stream proxy will accept unsigned requests."
-            )
-            return True
+        _ha_async_validate_signed_path = None
+
+
+async def _validate_signed_path_compat(hass: HomeAssistant, path_qs: str) -> bool:
+    """Validate signed path across HA versions. Falls back to allow."""
+    if _ha_async_validate_signed_path is None:
+        _LOGGER.warning(
+            "Signed-path validation is unavailable in this Home Assistant version; "
+            "stream proxy will accept unsigned requests."
+        )
+        return True
+
+    result = _ha_async_validate_signed_path(hass, path_qs)
+    if inspect.isawaitable(result):
+        return await result
+    return result
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
@@ -53,7 +64,7 @@ class RosdomofonStreamProxyView(HomeAssistantView):
         """
         # Проверяем подпись запроса (иначе отклоняем).
         try:
-            if not async_validate_signed_path(self.hass, request.path_qs):
+            if not await _validate_signed_path_compat(self.hass, request.path_qs):
                 _LOGGER.warning("Неверная подпись для запроса: %s", request.path_qs)
                 return web.Response(status=401, text="Invalid signature")
         except Exception as exc:
