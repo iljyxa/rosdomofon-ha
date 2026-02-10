@@ -125,26 +125,26 @@ async def test_webhook_handler_success(hass: HomeAssistant):
         mock_state = MagicMock()
         mock_state.name = "Дверь подъезда"
         mock_get.return_value = mock_state
-        hass.services.async_call = AsyncMock()
+        with patch("homeassistant.core.ServiceRegistry.async_call", new_callable=AsyncMock) as mock_async_call:
 
-        url = manager.generate("lock.rosdomofon_12345_1", 12)
-        webhook_id = url.split("/")[-1]
+            url = manager.generate("lock.rosdomofon_12345_1", 12)
+            webhook_id = url.split("/")[-1]
 
-        request = MagicMock()
-        request.app = {"hass": hass}
-        request.match_info = {"webhook_id": webhook_id}
-        request.method = hdrs.METH_POST
+            request = MagicMock()
+            request.app = {"hass": hass}
+            request.match_info = {"webhook_id": webhook_id}
+            request.method = hdrs.METH_POST
 
-        response = await manager._handle_webhook(hass, webhook_id, request)
+            response = await manager._handle_webhook(hass, webhook_id, request)
 
-        hass.services.async_call.assert_awaited_once_with(
-            "lock",
-            "unlock",
-            {"entity_id": "lock.rosdomofon_12345_1"},
-            blocking=True,
-        )
+            mock_async_call.assert_awaited_once_with(
+                "lock",
+                "unlock",
+                {"entity_id": "lock.rosdomofon_12345_1"},
+                blocking=True,
+            )
 
-        assert response.status == 200
+            assert response.status == 200
 
 
 async def test_webhook_handler_expired_link(hass: HomeAssistant):
