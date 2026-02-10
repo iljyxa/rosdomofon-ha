@@ -90,7 +90,7 @@ async def test_share_manager_revoke_all(hass: HomeAssistant):
         assert mock_unregister.call_count == 3
 
 
-def test_share_link_expiration():
+async def test_share_link_expiration():
     """Тест истечения срока действия ссылки (чисто синхронная логика)."""
     link = ShareLink(
         webhook_id="test_webhook",
