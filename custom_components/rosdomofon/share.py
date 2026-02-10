@@ -154,6 +154,19 @@ class ShareLinkManager:
         entity_id = link.entity_id
         _LOGGER.info("Открытие %s по гостевой ссылке %s", entity_id, webhook_id)
 
+        # Проверяем, что сущность существует
+        if hass.states.get(entity_id) is None:
+            _LOGGER.error("Сущность %s не найдена", entity_id)
+            return web.Response(
+                text=_html_page(
+                    "Ошибка",
+                    "Замок не найден. Возможно, интеграция была перенастроена.",
+                    success=False,
+                ),
+                content_type="text/html",
+                status=404,
+            )
+
         # Вызываем сервис lock.unlock
         try:
             await hass.services.async_call(

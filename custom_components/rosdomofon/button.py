@@ -12,6 +12,7 @@ from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
@@ -81,7 +82,7 @@ class RosdomofonShareButton(ButtonEntity):
         self._relay = relay
 
         device_name = _DEVICE_NAMES.get(device_type, f"Замок {device_type}")
-        self._lock_entity_id = f"lock.rosdomofon_{adapter_id}_{relay}"
+        self._lock_unique_id = f"rosdomofon_{adapter_id}_{relay}"
 
         self._attr_name = f"Поделиться: {device_name}"
         self._attr_icon = "mdi:share-variant"
@@ -89,9 +90,20 @@ class RosdomofonShareButton(ButtonEntity):
 
     async def async_press(self) -> None:
         """Нажатие кнопки: генерация гостевой ссылки или ошибка."""
+        # Получаем реальный entity_id замка из реестра по unique_id
+        registry = er.async_get(self.hass)
+        lock_entity_id = registry.async_get_entity_id(
+            "lock", DOMAIN, self._lock_unique_id
+        )
+        if lock_entity_id is None:
+            raise HomeAssistantError(
+                f"Замок с unique_id={self._lock_unique_id} не найден в реестре. "
+                "Убедитесь, что интеграция настроена корректно."
+            )
+
         try:
             url = self._share_manager.generate(
-                self._lock_entity_id,
+                lock_entity_id,
                 SHARE_LINK_DEFAULT_TTL_HOURS,
             )
         except ExternalURLNotAvailable:
@@ -112,9 +124,9 @@ class RosdomofonShareButton(ButtonEntity):
             f"`{url}`\n\n"
             f"Скопируйте ссылку и отправьте гостю.",
             title="Росдомофон: гостевая ссылка 🔗",
-            notification_id=f"rosdomofon_share_{self._lock_entity_id}",
+            notification_id=f"rosdomofon_share_{lock_entity_id}",
         )
-        _LOGGER.info("Создана гостевая ссылка для %s", self._lock_entity_id)
+        _LOGGER.info("Создана гостевая ссылка для %s", lock_entity_id)
 
 
 def _fetch_keys(access_token: str) -> list[dict]:
