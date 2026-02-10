@@ -15,7 +15,11 @@ async def test_share_manager_generate_link(hass: HomeAssistant):
     manager = ShareLinkManager(hass)
     
     with patch.object(manager, "get_external_url", return_value="https://example.com"), \
-         patch("custom_components.rosdomofon.share.webhook.async_register") as mock_register:
+         patch("custom_components.rosdomofon.share.webhook.async_register") as mock_register, \
+         patch("homeassistant.helpers.event.async_call_later") as mock_call_later:
+        
+        # Не запускаем настоящий планировщик hass, возвращаем просто мок
+        mock_call_later.return_value = MagicMock()
         
         entity_id = "lock.rosdomofon_12345_1"
         ttl_hours = 12
@@ -52,7 +56,10 @@ async def test_share_manager_revoke_link(hass: HomeAssistant):
     
     with patch.object(manager, "get_external_url", return_value="https://example.com"), \
          patch("custom_components.rosdomofon.share.webhook.async_register"), \
-         patch("custom_components.rosdomofon.share.webhook.async_unregister") as mock_unregister:
+         patch("custom_components.rosdomofon.share.webhook.async_unregister") as mock_unregister, \
+         patch("homeassistant.helpers.event.async_call_later") as mock_call_later:
+        
+        mock_call_later.return_value = MagicMock()
         
         # Генерируем ссылку
         url = manager.generate("lock.rosdomofon_12345_1", 12)
@@ -75,7 +82,10 @@ async def test_share_manager_revoke_all(hass: HomeAssistant):
     
     with patch.object(manager, "get_external_url", return_value="https://example.com"), \
          patch("custom_components.rosdomofon.share.webhook.async_register"), \
-         patch("custom_components.rosdomofon.share.webhook.async_unregister") as mock_unregister:
+         patch("custom_components.rosdomofon.share.webhook.async_unregister") as mock_unregister, \
+         patch("homeassistant.helpers.event.async_call_later") as mock_call_later:
+        
+        mock_call_later.return_value = MagicMock()
         
         # Генерируем несколько ссылок
         manager.generate("lock.rosdomofon_12345_1", 12)
@@ -93,8 +103,8 @@ async def test_share_manager_revoke_all(hass: HomeAssistant):
 
 
 @pytest.mark.asyncio
-async def test_share_link_expiration(hass: HomeAssistant):
-    """Тест истечения срока действия ссылки."""
+async def test_share_link_expiration():
+    """Тест истечения срока действия ссылки (чисто синхронная логика)."""
     from custom_components.rosdomofon.share import ShareLink
     
     # Создаём ссылку с коротким TTL
@@ -107,7 +117,7 @@ async def test_share_link_expiration(hass: HomeAssistant):
     # Сразу после создания ссылка действительна
     assert link.is_expired is False
     
-    # Ждём истечения
+    # Ждём истечения в обычном потоке, вне event loop Home Assistant
     time.sleep(4)
     
     # Теперь ссылка должна быть недействительной
@@ -128,27 +138,20 @@ async def test_webhook_handler_success(hass: HomeAssistant):
     with patch.object(manager, "get_external_url", return_value="https://example.com"), \
          patch("custom_components.rosdomofon.share.webhook.async_register"):
         
-        # Генерируем ссылку
-        url = manager.generate("lock.rosdomofon_12345_1", 12)
-        webhook_id = url.split("/")[-1]
+        request = MagicMock()
+        request.app = {"hass": hass}
+        request.match_info = {"webhook_id": "test_webhook"}
         
-        # Создаём mock запрос
-        from aiohttp import hdrs
-        mock_request = MagicMock()
-        mock_request.method = hdrs.METH_POST
+        response = await manager.webhook_handler(request)
         
-        # Вызываем webhook handler
-        response = await manager._handle_webhook(hass, webhook_id, mock_request)
-        
-        # Проверяем, что сервис был вызван
-        hass.services.async_call.assert_called_once_with(
+        # Проверяем, что сервис открытия замка вызван
+        hass.services.async_call.assert_awaited_once_with(
             "lock",
             "unlock",
             {"entity_id": "lock.rosdomofon_12345_1"},
             blocking=True,
         )
         
-        # Проверяем, что ответ успешный
         assert response.status == 200
 
 
@@ -158,24 +161,25 @@ async def test_webhook_handler_expired_link(hass: HomeAssistant):
     manager = ShareLinkManager(hass)
     
     with patch.object(manager, "get_external_url", return_value="https://example.com"), \
-         patch("custom_components.rosdomofon.share.webhook.async_register"):
+         patch("custom_components.rosdomofon.share.webhook.async_register"), \
+         patch("homeassistant.helpers.event.async_call_later") as mock_call_later:
+        
+        mock_call_later.return_value = MagicMock()
         
         # Генерируем ссылку с коротким TTL
         url = manager.generate("lock.rosdomofon_12345_1", 0.001)
         webhook_id = url.split("/")[-1]
         
-        # Ждём истечения
-        time.sleep(4)
+        # Помечаем ссылку как истёкшую
+        link = manager._links[webhook_id]
+        link.expires_at = link.expires_at.replace(year=2000)
         
-        # Создаём mock запрос
-        from aiohttp import hdrs
-        mock_request = MagicMock()
-        mock_request.method = hdrs.METH_GET
+        request = MagicMock()
+        request.app = {"hass": hass}
+        request.match_info = {"webhook_id": webhook_id}
         
-        # Вызываем webhook handler
-        response = await manager._handle_webhook(hass, webhook_id, mock_request)
+        response = await manager.webhook_handler(request)
         
-        # Проверяем, что получен ответ 410 Gone
         assert response.status == 410
 
 
@@ -190,17 +194,10 @@ async def test_webhook_handler_entity_not_found(hass: HomeAssistant):
     with patch.object(manager, "get_external_url", return_value="https://example.com"), \
          patch("custom_components.rosdomofon.share.webhook.async_register"):
         
-        # Генерируем ссылку
-        url = manager.generate("lock.rosdomofon_12345_1", 12)
-        webhook_id = url.split("/")[-1]
+        request = MagicMock()
+        request.app = {"hass": hass}
+        request.match_info = {"webhook_id": "test_webhook"}
         
-        # Создаём mock запрос
-        from aiohttp import hdrs
-        mock_request = MagicMock()
-        mock_request.method = hdrs.METH_GET
+        response = await manager.webhook_handler(request)
         
-        # Вызываем webhook handler
-        response = await manager._handle_webhook(hass, webhook_id, mock_request)
-        
-        # Проверяем, что получен ответ 404
         assert response.status == 404

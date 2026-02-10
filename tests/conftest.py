@@ -14,6 +14,24 @@ from custom_components.rosdomofon.const import DOMAIN
 
 
 @pytest.fixture
+async def hass():
+    """Фикстура HomeAssistant из pytest-homeassistant-custom-component.
+
+    Используем встроенную async-функциональную фикстуру, чтобы в тесты
+    приходил готовый объект HomeAssistant, а не async_generator.
+    """
+    from pytest_homeassistant_custom_component.common import (  # type: ignore
+        async_test_home_assistant,
+    )
+
+    hass = await async_test_home_assistant()
+    try:
+        yield hass
+    finally:
+        await hass.async_stop()
+
+
+@pytest.fixture
 def mock_access_token():
     """Фикстура для моковых токенов доступа."""
     return "test_access_token_12345"
@@ -119,7 +137,7 @@ def mock_requests_post():
 async def mock_token_manager(hass: HomeAssistant, mock_config_entry, mock_access_token):
     """Фикстура для мока TokenManager."""
     from custom_components.rosdomofon.token_manager import TokenManager
-    
+
     with patch.object(TokenManager, "ensure_valid_token", return_value=True):
         manager = TokenManager(hass, mock_config_entry)
         manager.access_token = mock_access_token
@@ -130,7 +148,7 @@ async def mock_token_manager(hass: HomeAssistant, mock_config_entry, mock_access
 def mock_share_manager(hass: HomeAssistant):
     """Фикстура для мока ShareLinkManager."""
     from custom_components.rosdomofon.share import ShareLinkManager
-    
+
     manager = ShareLinkManager(hass)
     with patch.object(manager, "get_external_url", return_value="https://example.com"):
         yield manager
@@ -140,17 +158,17 @@ def mock_share_manager(hass: HomeAssistant):
 async def setup_integration(hass: HomeAssistant, mock_config_entry):
     """Фикстура для настройки интеграции в тестовом окружении."""
     mock_config_entry.add_to_hass(hass)
-    
+
     # Мокаем все HTTP запросы
     with patch("custom_components.rosdomofon.lock._fetch_keys", return_value=[]), \
          patch("custom_components.rosdomofon.button._fetch_keys", return_value=[]), \
          patch("custom_components.rosdomofon.camera._fetch_cameras", return_value=[]), \
          patch("custom_components.rosdomofon.token_manager.TokenManager.ensure_valid_token", return_value=True):
-        
+
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
-    
+
     yield mock_config_entry
-    
+
     await hass.config_entries.async_unload(mock_config_entry.entry_id)
     await hass.async_block_till_done()
