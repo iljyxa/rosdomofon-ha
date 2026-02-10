@@ -11,6 +11,9 @@ from typing import Any
 
 import requests
 from homeassistant.components.camera import Camera, CameraEntityFeature
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+
 try:
     from homeassistant.components.http import async_sign_path as _ha_async_sign_path  # type: ignore
 except ImportError:
@@ -18,6 +21,12 @@ except ImportError:
         from homeassistant.components.http.auth import async_sign_path as _ha_async_sign_path  # type: ignore
     except ImportError:
         _ha_async_sign_path = None
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.network import get_url
+
+from .const import BASE_URL, DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def _sign_path_compat(hass: HomeAssistant, path: str) -> str:
@@ -38,14 +47,6 @@ async def _sign_path_compat(hass: HomeAssistant, path: str) -> str:
     if inspect.isawaitable(result):
         return await result
     return result
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.network import get_url
-
-from .const import BASE_URL, DOMAIN
-
-_LOGGER = logging.getLogger(__name__)
 
 # Эндпоинты API для получения списка камер и детальной информации
 # noinspection SpellCheckingInspection
