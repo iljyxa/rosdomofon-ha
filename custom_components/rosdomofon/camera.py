@@ -10,7 +10,10 @@ from typing import Any
 
 import requests
 from homeassistant.components.camera import Camera, CameraEntityFeature
-from homeassistant.components.http import async_sign_path
+try:
+    from homeassistant.components.http import async_sign_path
+except ImportError:  # Older HA
+    from homeassistant.components.http.auth import async_sign_path
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback

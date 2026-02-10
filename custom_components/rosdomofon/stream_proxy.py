@@ -8,7 +8,11 @@ import logging
 
 import requests
 from aiohttp import web
-from homeassistant.components.http import HomeAssistantView, async_validate_signed_path
+from homeassistant.components.http import HomeAssistantView
+try:
+    from homeassistant.components.http import async_validate_signed_path
+except ImportError:  # Older HA
+    from homeassistant.components.http.auth import async_validate_signed_path
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
