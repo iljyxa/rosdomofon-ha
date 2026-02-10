@@ -119,7 +119,7 @@ async def test_webhook_handler_success(hass: HomeAssistant):
     with patch.object(manager, "get_external_url", return_value="https://example.com"), \
          patch("custom_components.rosdomofon.share.webhook.async_register"), \
          patch("custom_components.rosdomofon.share.async_call_later") as mock_call_later, \
-         patch.object(hass.states, "get", create=True) as mock_get:
+         patch("homeassistant.core.StateMachine.get") as mock_get:
 
         mock_call_later.return_value = MagicMock()
         mock_state = MagicMock()
@@ -180,7 +180,7 @@ async def test_webhook_handler_entity_not_found(hass: HomeAssistant):
     with patch.object(manager, "get_external_url", return_value="https://example.com"), \
          patch("custom_components.rosdomofon.share.webhook.async_register"), \
          patch("custom_components.rosdomofon.share.async_call_later") as mock_call_later, \
-         patch.object(hass.states, "get", return_value=None, create=True):
+         patch("homeassistant.core.StateMachine.get", return_value=None):
 
         mock_call_later.return_value = MagicMock()
 
