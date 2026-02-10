@@ -49,7 +49,10 @@ async def test_lock_unlock(hass: HomeAssistant, mock_config_entry, mock_locks_da
     }
 
     with patch("custom_components.rosdomofon.lock._fetch_keys", return_value=mock_locks_data), \
-         patch("custom_components.rosdomofon.lock._activate_key", return_value=True) as mock_activate:
+         patch("custom_components.rosdomofon.lock._activate_key", return_value=True) as mock_activate, \
+         patch("custom_components.rosdomofon.lock.async_call_later") as mock_call_later:
+
+        mock_call_later.return_value = MagicMock()
 
         from custom_components.rosdomofon.lock import async_setup_entry
 
@@ -86,7 +89,10 @@ async def test_lock_auto_lock(hass: HomeAssistant, mock_config_entry, mock_locks
     }
 
     with patch("custom_components.rosdomofon.lock._fetch_keys", return_value=mock_locks_data), \
-         patch("custom_components.rosdomofon.lock._activate_key", return_value=True):
+         patch("custom_components.rosdomofon.lock._activate_key", return_value=True), \
+         patch("custom_components.rosdomofon.lock.async_call_later") as mock_call_later:
+
+        mock_call_later.return_value = MagicMock()
 
         from custom_components.rosdomofon.lock import async_setup_entry
 
