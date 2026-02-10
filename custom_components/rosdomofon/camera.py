@@ -55,6 +55,7 @@ async def async_setup_entry(
         return
 
     entities = []
+    camera_hosts = hass.data.setdefault(DOMAIN, {}).setdefault("_camera_hosts", {})
     for camera_data in cameras:
         camera_id = camera_data.get("id")
         if not camera_id:
@@ -67,6 +68,10 @@ async def async_setup_entry(
             )
             
             if camera_details:
+                rdva_data = camera_details.get("rdva", {})
+                rdva_uri = rdva_data.get("uri", "")
+                if rdva_uri:
+                    camera_hosts[str(camera_id)] = f"s.{rdva_uri}"
                 entities.append(
                     RosdomofonCamera(
                         token_manager=token_manager,
@@ -179,7 +184,6 @@ class RosdomofonCamera(Camera):
         return {
             "camera_id": self._camera_id,
             "stream_url": self._stream_source,
-            "access_token": self._token_manager.access_token,
         }
 
 

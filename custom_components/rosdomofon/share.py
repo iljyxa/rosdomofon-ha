@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+import html
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -245,6 +246,7 @@ def _html_page_with_button(
     remaining_minutes: int,
 ) -> str:
     """Страница с кнопкой открытия замка и таймером действия ключа."""
+    display_name = html.escape(display_name, quote=True)
 
     # Мягкий градиент от синевато-голубого к фиолетовому
     gradient_start = "#8fb7ff"  # светлый сине-голубой
@@ -438,3 +440,62 @@ def _html_page_with_button(
 </body>
 </html>"""
 
+
+def _html_page(title: str, message: str, success: bool = True) -> str:
+    """Простая HTML-страница с сообщением."""
+    title = html.escape(title, quote=True)
+    message = html.escape(message, quote=True)
+    color = "#1EB980" if success else "#FF5252"
+
+    return f"""\
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{title}</title>
+  <style>
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #ffffff;
+    }}
+    .card {{
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      padding: 28px 24px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.25);
+      text-align: center;
+    }}
+    .title {{
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }}
+    .message {{
+      font-size: 0.95rem;
+      opacity: 0.95;
+    }}
+    .status {{
+      margin-top: 16px;
+      font-weight: 700;
+      color: {color};
+    }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="title">{title}</div>
+    <div class="message">{message}</div>
+    <div class="status">{'OK' if success else 'ERROR'}</div>
+  </div>
+</body>
+</html>"""

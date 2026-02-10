@@ -3,7 +3,7 @@
 import time
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
-from aiohttp import web
+from aiohttp import web, hdrs
 from homeassistant.core import HomeAssistant
 
 from custom_components.rosdomofon.share import ShareLinkManager, ShareLink, ExternalURLNotAvailable
@@ -120,13 +120,20 @@ async def test_webhook_handler_success(hass: HomeAssistant):
     hass.services.async_call = AsyncMock()
 
     with patch.object(manager, "get_external_url", return_value="https://example.com"), \
-         patch("custom_components.rosdomofon.share.webhook.async_register"):
+         patch("custom_components.rosdomofon.share.webhook.async_register"), \
+         patch("homeassistant.helpers.event.async_call_later") as mock_call_later:
+
+        mock_call_later.return_value = MagicMock()
+
+        url = manager.generate("lock.rosdomofon_12345_1", 12)
+        webhook_id = url.split("/")[-1]
 
         request = MagicMock()
         request.app = {"hass": hass}
-        request.match_info = {"webhook_id": "test_webhook"}
+        request.match_info = {"webhook_id": webhook_id}
+        request.method = hdrs.METH_POST
 
-        response = await manager.webhook_handler(request)
+        response = await manager._handle_webhook(hass, webhook_id, request)
 
         hass.services.async_call.assert_awaited_once_with(
             "lock",
@@ -171,12 +178,19 @@ async def test_webhook_handler_entity_not_found(hass: HomeAssistant):
     hass.states.get = MagicMock(return_value=None)
 
     with patch.object(manager, "get_external_url", return_value="https://example.com"), \
-         patch("custom_components.rosdomofon.share.webhook.async_register"):
+         patch("custom_components.rosdomofon.share.webhook.async_register"), \
+         patch("homeassistant.helpers.event.async_call_later") as mock_call_later:
+
+        mock_call_later.return_value = MagicMock()
+
+        url = manager.generate("lock.rosdomofon_12345_1", 12)
+        webhook_id = url.split("/")[-1]
 
         request = MagicMock()
         request.app = {"hass": hass}
-        request.match_info = {"webhook_id": "test_webhook"}
+        request.match_info = {"webhook_id": webhook_id}
+        request.method = hdrs.METH_GET
 
-        response = await manager.webhook_handler(request)
+        response = await manager._handle_webhook(hass, webhook_id, request)
 
         assert response.status == 404

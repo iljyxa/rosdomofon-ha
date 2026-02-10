@@ -23,7 +23,7 @@ class RosdomofonStreamProxyView(HomeAssistantView):
     # host теперь часть пути
     url = "/api/rosdomofon/stream/{camera_id}/{host}/{path:.*}"
     name = "api:rosdomofon:stream_proxy"
-    requires_auth = False
+    requires_auth = True
 
     def __init__(self, hass: HomeAssistant) -> None:
         """Инициализация view."""
@@ -39,6 +39,16 @@ class RosdomofonStreamProxyView(HomeAssistantView):
             host: хост HLS-сервера (например, s.rdva68.rosdomofon.com)
             path: путь к ресурсу (playlist.m3u8, segment.ts и т.д.)
         """
+        # Проверяем, что запрошенный host соответствует камере
+        camera_hosts = self.hass.data.get(DOMAIN, {}).get("_camera_hosts", {})
+        expected_host = camera_hosts.get(str(camera_id))
+        if not expected_host:
+            _LOGGER.error("Неизвестная камера %s", camera_id)
+            return web.Response(status=404, text="Camera not found")
+        if host != expected_host or not host.endswith(".rosdomofon.com"):
+            _LOGGER.error("Неверный host для camera_id=%s: %s", camera_id, host)
+            return web.Response(status=403, text="Invalid host")
+
         # Находим token_manager для этой камеры
         token_manager = None
         for entry_id, data in self.hass.data.get(DOMAIN, {}).items():

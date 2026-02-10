@@ -135,6 +135,10 @@ class RosdomofonLock(LockEntity):
         self.async_write_ha_state()
         _LOGGER.info("%s открыт", self.name)
 
+        if self._unlock_timer is not None:
+            self._unlock_timer()
+            self._unlock_timer = None
+
         self._unlock_timer = async_call_later(
             self.hass, _AUTO_LOCK_DELAY, self._async_auto_lock
         )
