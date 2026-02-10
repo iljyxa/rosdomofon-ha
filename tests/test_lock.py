@@ -58,6 +58,7 @@ async def test_lock_unlock(hass: HomeAssistant, mock_config_entry, mock_locks_da
 
         lock_entity = entities[0]
         lock_entity.hass = hass
+        lock_entity.entity_id = "lock.rosdomofon_12345_1"
 
         assert lock_entity.is_locked is True
 
@@ -94,6 +95,7 @@ async def test_lock_auto_lock(hass: HomeAssistant, mock_config_entry, mock_locks
 
         lock_entity = entities[0]
         lock_entity.hass = hass
+        lock_entity.entity_id = "lock.rosdomofon_12345_1"
 
         await lock_entity.async_unlock()
         assert lock_entity.is_locked is False
@@ -129,6 +131,7 @@ async def test_lock_unlock_failure(hass: HomeAssistant, mock_config_entry, mock_
 
         lock_entity = entities[0]
         lock_entity.hass = hass
+        lock_entity.entity_id = "lock.rosdomofon_12345_1"
 
         await lock_entity.async_unlock()
 
@@ -142,7 +145,7 @@ async def test_lock_token_refresh_failure(hass: HomeAssistant, mock_config_entry
     mock_config_entry.add_to_hass(hass)
 
     mock_token_manager = MagicMock(
-        ensure_valid_token=AsyncMock(return_value=False),
+        ensure_valid_token=AsyncMock(return_value=True),
         access_token="test_token"
     )
 
@@ -160,6 +163,8 @@ async def test_lock_token_refresh_failure(hass: HomeAssistant, mock_config_entry
 
         lock_entity = entities[0]
         lock_entity.hass = hass
+        lock_entity.entity_id = "lock.rosdomofon_12345_1"
+        mock_token_manager.ensure_valid_token = AsyncMock(return_value=False)
 
         await lock_entity.async_unlock()
 

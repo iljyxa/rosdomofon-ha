@@ -1,7 +1,7 @@
 """Тесты для __init__.py интеграции rosdomofon."""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -20,7 +20,7 @@ async def test_setup_entry_success(hass: HomeAssistant, mock_config_entry):
          patch.object(hass.config_entries, "async_forward_entry_setups") as mock_forward:
 
         mock_tm_instance = MagicMock()
-        mock_tm_instance.ensure_valid_token.return_value = True
+        mock_tm_instance.ensure_valid_token = AsyncMock(return_value=True)
         mock_tm_instance.access_token = "test_token"
         mock_token_manager.return_value = mock_tm_instance
 
@@ -43,7 +43,7 @@ async def test_setup_entry_token_failure(hass: HomeAssistant, mock_config_entry)
 
     with patch("custom_components.rosdomofon.TokenManager") as mock_token_manager:
         mock_tm_instance = MagicMock()
-        mock_tm_instance.ensure_valid_token.return_value = False
+        mock_tm_instance.ensure_valid_token = AsyncMock(return_value=False)
         mock_token_manager.return_value = mock_tm_instance
 
         from custom_components.rosdomofon import async_setup_entry
@@ -72,7 +72,7 @@ async def test_setup_entry_proxy_registered_once(hass: HomeAssistant, mock_confi
          patch.object(hass.config_entries, "async_forward_entry_setups"):
 
         mock_tm_instance = MagicMock()
-        mock_tm_instance.ensure_valid_token.return_value = True
+        mock_tm_instance.ensure_valid_token = AsyncMock(return_value=True)
         mock_tm_instance.access_token = "test_token"
         mock_token_manager.return_value = mock_tm_instance
 
@@ -95,7 +95,7 @@ async def test_unload_entry(hass: HomeAssistant, mock_config_entry):
          patch.object(hass.config_entries, "async_unload_platforms", return_value=True):
 
         mock_tm_instance = MagicMock()
-        mock_tm_instance.ensure_valid_token.return_value = True
+        mock_tm_instance.ensure_valid_token = AsyncMock(return_value=True)
         mock_tm_instance.access_token = "test_token"
         mock_token_manager.return_value = mock_tm_instance
 
@@ -122,7 +122,7 @@ async def test_service_generate_share_link(hass: HomeAssistant, mock_config_entr
          patch.object(hass.config_entries, "async_forward_entry_setups"):
 
         mock_tm_instance = MagicMock()
-        mock_tm_instance.ensure_valid_token.return_value = True
+        mock_tm_instance.ensure_valid_token = AsyncMock(return_value=True)
         mock_tm_instance.access_token = "test_token"
         mock_token_manager.return_value = mock_tm_instance
 

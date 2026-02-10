@@ -51,7 +51,7 @@ async def test_camera_stream_source(hass: HomeAssistant, mock_config_entry, mock
     
     with patch("custom_components.rosdomofon.camera._fetch_cameras", return_value=mock_cameras_data), \
          patch("custom_components.rosdomofon.camera._fetch_camera_details", return_value=mock_camera_details), \
-         patch("homeassistant.helpers.network.get_url", return_value="https://ha.example.com"):
+         patch("custom_components.rosdomofon.camera.get_url", return_value="https://ha.example.com"):
         
         from custom_components.rosdomofon.camera import async_setup_entry
         
@@ -73,9 +73,9 @@ async def test_camera_stream_source(hass: HomeAssistant, mock_config_entry, mock
 async def test_camera_stream_source_token_failure(hass: HomeAssistant, mock_config_entry, mock_cameras_data, mock_camera_details):
     """Тест получения stream source при неудаче обновления токена."""
     mock_config_entry.add_to_hass(hass)
-    
+
     mock_token_manager = MagicMock(
-        ensure_valid_token=AsyncMock(return_value=False),
+        ensure_valid_token=AsyncMock(return_value=True),
         access_token="test_token"
     )
     
@@ -95,6 +95,7 @@ async def test_camera_stream_source_token_failure(hass: HomeAssistant, mock_conf
         
         camera_entity = entities[0]
         camera_entity.hass = hass
+        mock_token_manager.ensure_valid_token = AsyncMock(return_value=False)
         
         # Получаем stream source
         stream_source = await camera_entity.stream_source()

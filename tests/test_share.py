@@ -17,7 +17,7 @@ async def test_share_manager_generate_link(hass: HomeAssistant):
 
     with patch.object(manager, "get_external_url", return_value="https://example.com"), \
          patch("custom_components.rosdomofon.share.webhook.async_register") as mock_register, \
-         patch("homeassistant.helpers.event.async_call_later") as mock_call_later:
+         patch("custom_components.rosdomofon.share.async_call_later") as mock_call_later:
 
         mock_call_later.return_value = MagicMock()
 
@@ -52,7 +52,7 @@ async def test_share_manager_revoke_link(hass: HomeAssistant):
     with patch.object(manager, "get_external_url", return_value="https://example.com"), \
          patch("custom_components.rosdomofon.share.webhook.async_register"), \
          patch("custom_components.rosdomofon.share.webhook.async_unregister") as mock_unregister, \
-         patch("homeassistant.helpers.event.async_call_later") as mock_call_later:
+         patch("custom_components.rosdomofon.share.async_call_later") as mock_call_later:
 
         mock_call_later.return_value = MagicMock()
 
@@ -74,7 +74,7 @@ async def test_share_manager_revoke_all(hass: HomeAssistant):
     with patch.object(manager, "get_external_url", return_value="https://example.com"), \
          patch("custom_components.rosdomofon.share.webhook.async_register"), \
          patch("custom_components.rosdomofon.share.webhook.async_unregister") as mock_unregister, \
-         patch("homeassistant.helpers.event.async_call_later") as mock_call_later:
+         patch("custom_components.rosdomofon.share.async_call_later") as mock_call_later:
 
         mock_call_later.return_value = MagicMock()
 
@@ -116,16 +116,16 @@ async def test_webhook_handler_success(hass: HomeAssistant):
     """Тест успешной обработки webhook запроса."""
     manager = ShareLinkManager(hass)
 
-    mock_state = MagicMock()
-    mock_state.name = "Дверь подъезда"
-    hass.states.get = MagicMock(return_value=mock_state)
-    hass.services.async_call = AsyncMock()
-
     with patch.object(manager, "get_external_url", return_value="https://example.com"), \
          patch("custom_components.rosdomofon.share.webhook.async_register"), \
-         patch("homeassistant.helpers.event.async_call_later") as mock_call_later:
+         patch("custom_components.rosdomofon.share.async_call_later") as mock_call_later, \
+         patch.object(hass.states, "get") as mock_get:
 
         mock_call_later.return_value = MagicMock()
+        mock_state = MagicMock()
+        mock_state.name = "Дверь подъезда"
+        mock_get.return_value = mock_state
+        hass.services.async_call = AsyncMock()
 
         url = manager.generate("lock.rosdomofon_12345_1", 12)
         webhook_id = url.split("/")[-1]
@@ -153,7 +153,7 @@ async def test_webhook_handler_expired_link(hass: HomeAssistant):
 
     with patch.object(manager, "get_external_url", return_value="https://example.com"), \
          patch("custom_components.rosdomofon.share.webhook.async_register"), \
-         patch("homeassistant.helpers.event.async_call_later") as mock_call_later:
+         patch("custom_components.rosdomofon.share.async_call_later") as mock_call_later:
 
         mock_call_later.return_value = MagicMock()
 
@@ -177,11 +177,10 @@ async def test_webhook_handler_entity_not_found(hass: HomeAssistant):
     """Тест обработки webhook когда сущность не найдена."""
     manager = ShareLinkManager(hass)
 
-    hass.states.get = MagicMock(return_value=None)
-
     with patch.object(manager, "get_external_url", return_value="https://example.com"), \
          patch("custom_components.rosdomofon.share.webhook.async_register"), \
-         patch("homeassistant.helpers.event.async_call_later") as mock_call_later:
+         patch("custom_components.rosdomofon.share.async_call_later") as mock_call_later, \
+         patch.object(hass.states, "get", return_value=None):
 
         mock_call_later.return_value = MagicMock()
 
