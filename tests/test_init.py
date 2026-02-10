@@ -9,7 +9,6 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.rosdomofon.const import DOMAIN
 
 
-@pytest.mark.asyncio
 async def test_setup_entry_success(hass: HomeAssistant, mock_config_entry):
     """Тест успешной настройки интеграции."""
     mock_config_entry.add_to_hass(hass)

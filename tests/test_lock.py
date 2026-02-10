@@ -9,7 +9,6 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.rosdomofon.const import DOMAIN
 
 
-@pytest.mark.asyncio
 async def test_lock_setup(hass: HomeAssistant, mock_config_entry, mock_locks_data):
     """Тест настройки замков."""
     mock_config_entry.add_to_hass(hass)

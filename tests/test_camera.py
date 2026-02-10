@@ -8,7 +8,6 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.rosdomofon.const import DOMAIN
 
 
-@pytest.mark.asyncio
 async def test_camera_setup(hass: HomeAssistant, mock_config_entry, mock_cameras_data, mock_camera_details):
     """Тест настройки камер."""
     mock_config_entry.add_to_hass(hass)
@@ -33,7 +32,6 @@ async def test_camera_setup(hass: HomeAssistant, mock_config_entry, mock_cameras
         assert entities[0]._attr_name == "Камера подъезд"
 
 
-@pytest.mark.asyncio
 async def test_camera_stream_source(hass: HomeAssistant, mock_config_entry, mock_cameras_data, mock_camera_details):
     """Тест получения stream source для камеры."""
     mock_config_entry.add_to_hass(hass)
@@ -70,7 +68,6 @@ async def test_camera_stream_source(hass: HomeAssistant, mock_config_entry, mock
         assert "rdva68.rosdomofon.com" in stream_source
 
 
-@pytest.mark.asyncio
 async def test_camera_stream_source_token_failure(hass: HomeAssistant, mock_config_entry, mock_cameras_data, mock_camera_details):
     """Тест получения stream source при неудаче обновления токена."""
     mock_config_entry.add_to_hass(hass)
@@ -104,7 +101,6 @@ async def test_camera_stream_source_token_failure(hass: HomeAssistant, mock_conf
         assert stream_source is None
 
 
-@pytest.mark.asyncio
 async def test_camera_setup_no_cameras(hass: HomeAssistant, mock_config_entry):
     """Тест настройки когда камер нет."""
     mock_config_entry.add_to_hass(hass)
@@ -125,7 +121,6 @@ async def test_camera_setup_no_cameras(hass: HomeAssistant, mock_config_entry):
         assert len(entities) == 0
 
 
-@pytest.mark.asyncio
 async def test_camera_setup_invalid_camera_id(hass: HomeAssistant, mock_config_entry):
     """Тест настройки с некорректным camera_id."""
     mock_config_entry.add_to_hass(hass)
@@ -149,7 +144,6 @@ async def test_camera_setup_invalid_camera_id(hass: HomeAssistant, mock_config_e
         assert len(entities) == 0
 
 
-@pytest.mark.asyncio
 async def test_camera_image_returns_none(hass: HomeAssistant, mock_config_entry, mock_cameras_data, mock_camera_details):
     """Тест, что async_camera_image возвращает None (HLS только)."""
     mock_config_entry.add_to_hass(hass)

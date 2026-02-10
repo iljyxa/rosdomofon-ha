@@ -9,7 +9,6 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.rosdomofon.const import DOMAIN
 
 
-@pytest.mark.asyncio
 async def test_button_setup(hass: HomeAssistant, mock_config_entry, mock_locks_data):
     """Тест настройки кнопок."""
     mock_config_entry.add_to_hass(hass)
@@ -36,7 +35,6 @@ async def test_button_setup(hass: HomeAssistant, mock_config_entry, mock_locks_d
         assert entities[0]._attr_icon == "mdi:share-variant"
 
 
-@pytest.mark.asyncio
 async def test_button_press_success(hass: HomeAssistant, mock_config_entry, mock_locks_data):
     """Тест успешного нажатия кнопки."""
     mock_config_entry.add_to_hass(hass)
@@ -74,7 +72,6 @@ async def test_button_press_success(hass: HomeAssistant, mock_config_entry, mock
         mock_share_manager.generate.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_button_press_lock_not_found(hass: HomeAssistant, mock_config_entry, mock_locks_data):
     """Тест нажатия кнопки, когда замок не найден."""
     mock_config_entry.add_to_hass(hass)
@@ -109,7 +106,6 @@ async def test_button_press_lock_not_found(hass: HomeAssistant, mock_config_entr
             await button_entity.async_press()
 
 
-@pytest.mark.asyncio
 async def test_button_press_external_url_not_available(hass: HomeAssistant, mock_config_entry, mock_locks_data):
     """Тест нажатия кнопки без внешнего URL."""
     mock_config_entry.add_to_hass(hass)
@@ -146,7 +142,6 @@ async def test_button_press_external_url_not_available(hass: HomeAssistant, mock
             await button_entity.async_press()
 
 
-@pytest.mark.asyncio
 async def test_button_setup_token_failure(hass: HomeAssistant, mock_config_entry):
     """Тест настройки кнопок при неудаче обновления токена."""
     mock_config_entry.add_to_hass(hass)

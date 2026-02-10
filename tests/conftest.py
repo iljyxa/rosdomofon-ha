@@ -5,6 +5,7 @@
 """
 
 import pytest
+import pytest_asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
 from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
@@ -13,7 +14,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.rosdomofon.const import DOMAIN
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def hass():
     """Фикстура HomeAssistant из pytest-homeassistant-custom-component.
 
@@ -133,7 +134,7 @@ def mock_requests_post():
         yield mock_post
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def mock_token_manager(hass: HomeAssistant, mock_config_entry, mock_access_token):
     """Фикстура для мока TokenManager."""
     from custom_components.rosdomofon.token_manager import TokenManager
@@ -144,8 +145,8 @@ async def mock_token_manager(hass: HomeAssistant, mock_config_entry, mock_access
         yield manager
 
 
-@pytest.fixture
-def mock_share_manager(hass: HomeAssistant):
+@pytest_asyncio.fixture
+async def mock_share_manager(hass: HomeAssistant):
     """Фикстура для мока ShareLinkManager."""
     from custom_components.rosdomofon.share import ShareLinkManager
 
@@ -154,7 +155,7 @@ def mock_share_manager(hass: HomeAssistant):
         yield manager
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def setup_integration(hass: HomeAssistant, mock_config_entry):
     """Фикстура для настройки интеграции в тестовом окружении."""
     mock_config_entry.add_to_hass(hass)

@@ -9,7 +9,6 @@ from homeassistant.core import HomeAssistant
 from custom_components.rosdomofon.share import ShareLinkManager, ExternalURLNotAvailable
 
 
-@pytest.mark.asyncio
 async def test_share_manager_generate_link(hass: HomeAssistant):
     """Тест генерации гостевой ссылки."""
     manager = ShareLinkManager(hass)
