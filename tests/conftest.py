@@ -1,9 +1,10 @@
 """
-Пирятуры для тестов интеграции rosdomofon-ha.
+Фикстуры для тестов интеграции rosdomofon-ha.
 
 Содержит фикстуры для настройки тестового окружения Home Assistant.
 """
 
+import asyncio
 import pytest
 import pytest_asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
@@ -15,17 +16,13 @@ from custom_components.rosdomofon.const import DOMAIN
 
 
 @pytest_asyncio.fixture
-async def hass():
-    """Фикстура HomeAssistant из pytest-homeassistant-custom-component.
-
-    Используем встроенную async-функциональную фикстуру, чтобы в тесты
-    приходил готовый объект HomeAssistant, а не async_generator.
-    """
-    from pytest_homeassistant_custom_component.common import (  # type: ignore
+async def hass(event_loop):
+    """Фикстура HomeAssistant из pytest-homeassistant-custom-component."""
+    from pytest_homeassistant_custom_component.common import (
         async_test_home_assistant,
     )
 
-    hass = await async_test_home_assistant()
+    hass = await async_test_home_assistant(event_loop)
     try:
         yield hass
     finally:
@@ -72,19 +69,19 @@ def mock_locks_data():
         {
             "adapterId": "12345",
             "relay": 1,
-            "type": 1,  # Дверь подъезда
+            "type": 1,
             "name": "Дверь подъезда",
         },
         {
             "adapterId": "12345",
             "relay": 2,
-            "type": 2,  # Шлагбаум
+            "type": 2,
             "name": "Шлагбаум",
         },
         {
             "adapterId": "67890",
             "relay": 1,
-            "type": 3,  # Ворота
+            "type": 3,
             "name": "Ворота",
         },
     ]
@@ -160,7 +157,6 @@ async def setup_integration(hass: HomeAssistant, mock_config_entry):
     """Фикстура для настройки интеграции в тестовом окружении."""
     mock_config_entry.add_to_hass(hass)
 
-    # Мокаем все HTTP запросы
     with patch("custom_components.rosdomofon.lock._fetch_keys", return_value=[]), \
          patch("custom_components.rosdomofon.button._fetch_keys", return_value=[]), \
          patch("custom_components.rosdomofon.camera._fetch_cameras", return_value=[]), \
