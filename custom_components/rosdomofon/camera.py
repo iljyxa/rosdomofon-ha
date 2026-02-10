@@ -10,6 +10,7 @@ from typing import Any
 
 import requests
 from homeassistant.components.camera import Camera, CameraEntityFeature
+from homeassistant.components.http import async_sign_path
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -167,7 +168,8 @@ class RosdomofonCamera(Camera):
 
         # path сейчас: live/39167.m3u8
         proxy_path = f"/api/rosdomofon/stream/{self._camera_id}/{host}/{path}"
-        proxy_url = f"{base_url}{proxy_path}"
+        signed_path = async_sign_path(self.hass, proxy_path)
+        proxy_url = f"{base_url}{signed_path}"
 
         _LOGGER.debug(
             "Stream source для камеры %s: %s (прокси для %s)",

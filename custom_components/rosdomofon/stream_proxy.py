@@ -8,7 +8,7 @@ import logging
 
 import requests
 from aiohttp import web
-from homeassistant.components.http import HomeAssistantView
+from homeassistant.components.http import HomeAssistantView, async_validate_signed_path
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
@@ -23,7 +23,7 @@ class RosdomofonStreamProxyView(HomeAssistantView):
     # host теперь часть пути
     url = "/api/rosdomofon/stream/{camera_id}/{host}/{path:.*}"
     name = "api:rosdomofon:stream_proxy"
-    requires_auth = True
+    requires_auth = False
 
     def __init__(self, hass: HomeAssistant) -> None:
         """Инициализация view."""
@@ -39,6 +39,15 @@ class RosdomofonStreamProxyView(HomeAssistantView):
             host: хост HLS-сервера (например, s.rdva68.rosdomofon.com)
             path: путь к ресурсу (playlist.m3u8, segment.ts и т.д.)
         """
+        # Проверяем подпись запроса (иначе отклоняем).
+        try:
+            if not async_validate_signed_path(self.hass, request.path_qs):
+                _LOGGER.warning("Неверная подпись для запроса: %s", request.path_qs)
+                return web.Response(status=401, text="Invalid signature")
+        except Exception as exc:
+            _LOGGER.debug("Ошибка проверки подписи: %s", exc)
+            return web.Response(status=401, text="Invalid signature")
+
         # Проверяем, что запрошенный host соответствует камере
         camera_hosts = self.hass.data.get(DOMAIN, {}).get("_camera_hosts", {})
         expected_host = camera_hosts.get(str(camera_id))
