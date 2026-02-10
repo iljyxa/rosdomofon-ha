@@ -10,9 +10,17 @@ import requests
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 try:
-    from homeassistant.components.http import async_validate_signed_path
-except ImportError:  # Older HA
-    from homeassistant.components.http.auth import async_validate_signed_path
+    from homeassistant.components.http import async_validate_signed_path  # type: ignore
+except ImportError:
+    try:
+        from homeassistant.components.http.auth import async_validate_signed_path  # type: ignore
+    except ImportError:
+        async def async_validate_signed_path(_hass, _path_qs: str) -> bool:  # type: ignore
+            _LOGGER.warning(
+                "Signed-path validation is unavailable in this Home Assistant version; "
+                "stream proxy will accept unsigned requests."
+            )
+            return True
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN

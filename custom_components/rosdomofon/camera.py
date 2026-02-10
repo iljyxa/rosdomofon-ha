@@ -11,9 +11,17 @@ from typing import Any
 import requests
 from homeassistant.components.camera import Camera, CameraEntityFeature
 try:
-    from homeassistant.components.http import async_sign_path
-except ImportError:  # Older HA
-    from homeassistant.components.http.auth import async_sign_path
+    from homeassistant.components.http import async_sign_path  # type: ignore
+except ImportError:
+    try:
+        from homeassistant.components.http.auth import async_sign_path  # type: ignore
+    except ImportError:
+        def async_sign_path(_hass, path: str) -> str:  # type: ignore
+            _LOGGER.warning(
+                "Signed-path helper is unavailable in this Home Assistant version; "
+                "stream proxy URL will be unsigned."
+            )
+            return path
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
