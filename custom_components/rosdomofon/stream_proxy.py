@@ -16,6 +16,7 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 
+# noinspection SpellCheckingInspection
 class RosdomofonStreamProxyView(HomeAssistantView):
     """HTTP View для проксирования HLS потоков с авторизацией."""
 

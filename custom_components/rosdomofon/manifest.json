@@ -1,14 +1,8 @@
 {
   "domain": "rosdomofon",
   "name": "Росдомофон",
-  "version": "1.3.0",
   "config_flow": true,
-  "documentation": "https://github.com/iljyxa/rosdomofon-ha",
-  "issue_tracker": "https://github.com/iljyxa/rosdomofon-ha/issues",
-  "dependencies": [],
-  "requirements": [
-    "requests"
-  ],
+  "requirements": ["requests"],
   "codeowners": [
     "@iljyxa"
   ],

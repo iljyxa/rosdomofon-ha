@@ -44,6 +44,7 @@ class ShareLink:
         return time.time() > self.expires_at
 
 
+# noinspection SpellCheckingInspection
 class ShareLinkManager:
     """Управляет временными ссылками для открытия замков."""
 
@@ -237,6 +238,7 @@ class ExternalURLNotAvailable(Exception):
     """Внешний URL Home Assistant не настроен."""
 
 
+# noinspection SpellCheckingInspection
 def _html_page_with_button(
     display_name: str,
     remaining_hours: int,

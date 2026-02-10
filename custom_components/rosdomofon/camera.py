@@ -20,6 +20,7 @@ from .const import BASE_URL, DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 # Эндпоинты API для получения списка камер и детальной информации
+# noinspection SpellCheckingInspection
 CAMERAS_LIST_URL = f"{BASE_URL}/abonents-service/api/v2/abonents/cameras"
 CAMERA_DETAILS_URL = f"{BASE_URL}/cameras-service/api/v1/cameras/{{camera_id}}"
 
@@ -92,6 +93,7 @@ async def async_setup_entry(
 # ---------------------------------------------------------------------------
 
 
+# noinspection SpellCheckingInspection
 class RosdomofonCamera(Camera):
     """Камера Росдомофон с поддержкой HLS потока."""
 
