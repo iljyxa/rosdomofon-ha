@@ -152,10 +152,11 @@ class ShareLinkManager:
             )
 
         entity_id = link.entity_id
-        _LOGGER.info("Открытие %s по гостевой ссылке %s", entity_id, webhook_id)
+        _LOGGER.info("Обработка гостевой ссылки %s для %s", webhook_id, entity_id)
 
-        # Проверяем, что сущность существует
-        if hass.states.get(entity_id) is None:
+        # Проверяем, что сущность существует и получаем её имя для отображения
+        state = hass.states.get(entity_id)
+        if state is None:
             _LOGGER.error("Сущность %s не найдена", entity_id)
             return web.Response(
                 text=_html_page(
@@ -167,7 +168,25 @@ class ShareLinkManager:
                 status=404,
             )
 
-        # Вызываем сервис lock.unlock
+        display_name = state.name or "Замок"
+
+        # Если это первый заход (GET) — показываем страницу с кнопкой
+        if request.method == hdrs.METH_GET:
+            now = time.time()
+            remaining = max(0, link.expires_at - now)
+            remaining_hours = int(remaining // 3600)
+            remaining_minutes = int((remaining % 3600) // 60)
+
+            return web.Response(
+                text=_html_page_with_button(
+                    display_name,
+                    remaining_hours,
+                    remaining_minutes,
+                ),
+                content_type="text/html",
+            )
+
+        # Далее считаем, что это POST с попыткой открыть замок
         try:
             await hass.services.async_call(
                 "lock",
@@ -177,23 +196,22 @@ class ShareLinkManager:
             )
         except Exception as exc:
             _LOGGER.error("Ошибка открытия %s: %s", entity_id, exc)
-            return web.Response(
-                text=_html_page(
-                    "Ошибка",
-                    "Не удалось открыть замок. Попробуйте позже.",
-                    success=False,
-                ),
-                content_type="text/html",
+            return web.json_response(
+                {
+                    "status": "error",
+                    "error": str(exc),
+                    "title": "Ошибка",
+                    "message": f"Не удалось открыть {display_name}. Попробуйте позже.",
+                },
                 status=500,
             )
 
-        return web.Response(
-            text=_html_page(
-                "Дверь открыта ✅",
-                "Замок успешно открыт. Дверь автоматически закроется.",
-                success=True,
-            ),
-            content_type="text/html",
+        return web.json_response(
+            {
+                "status": "ok",
+                "title": f"{display_name} открыта",
+                "message": f"{display_name} успешно открыта.",
+            }
         )
 
     # ------------------------------------------------------------------
@@ -219,40 +237,203 @@ class ExternalURLNotAvailable(Exception):
     """Внешний URL Home Assistant не настроен."""
 
 
-# ---------------------------------------------------------------------------
-# HTML-шаблон для ответа по ссылке
-# ---------------------------------------------------------------------------
+def _html_page_with_button(
+    display_name: str,
+    remaining_hours: int,
+    remaining_minutes: int,
+) -> str:
+    """Страница с кнопкой открытия замка и таймером действия ключа."""
 
-def _html_page(title: str, message: str, *, success: bool = True) -> str:
-    """Минимальная HTML-страница для гостя по ссылке."""
-    color = "#4CAF50" if success else "#F44336"
+    # Мягкий градиент от синевато-голубого к фиолетовому
+    gradient_start = "#8fb7ff"  # светлый сине-голубой
+    gradient_end = "#c7a4ff"    # мягкий фиолетовый
+    accent_color = "#7b5cff"    # фиолетовый для кнопки и акцентов
+    text_color = "#ffffff"
+
     return f"""\
 <!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{title}</title>
+  <title>Гостевой доступ</title>
   <style>
+    * {{ box-sizing: border-box; }}
     body {{
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      display: flex; justify-content: center; align-items: center;
-      min-height: 100vh; margin: 0;
-      background: #f5f5f5; color: #333;
+      background: linear-gradient(160deg, {gradient_start}, {gradient_end});
+      color: {text_color};
     }}
     .card {{
-      background: #fff; border-radius: 16px; padding: 40px 32px;
-      box-shadow: 0 2px 12px rgba(0,0,0,.1); text-align: center;
-      max-width: 360px; width: 90%;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      padding: 32px 24px 28px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.25);
+      backdrop-filter: blur(18px);
+      text-align: center;
     }}
-    .card h1 {{ color: {color}; font-size: 1.5em; margin-bottom: 8px; }}
-    .card p {{ color: #666; font-size: 1em; line-height: 1.5; }}
+    .title {{
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }}
+    .subtitle {{
+      font-size: 0.9rem;
+      opacity: 0.9;
+      margin-bottom: 24px;
+    }}
+    .timer {{
+      font-size: 0.85rem;
+      opacity: 0.95;
+      margin-bottom: 28px;
+    }}
+    .timer span {{
+      font-weight: 600;
+    }}
+    .button-wrapper {{
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }}
+    .circle-button {{
+      position: relative;
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      border: none;
+      background: #fff;
+      color: {accent_color};
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.20);
+      transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.15s ease;
+    }}
+    .circle-button:active {{
+      transform: scale(0.97);
+      box-shadow: 0 8px 22px rgba(0,0,0,0.24);
+    }}
+    .circle-button.disabled {{
+      cursor: default;
+      opacity: 0.85;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+    }}
+    .icon {{
+      font-size: 44px;
+      margin-bottom: 8px;
+    }}
+    .label {{
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }}
+    .status-ok {{ color: #1EB980; }}
+    .status-error {{ color: #FF5252; }}
+    .status-progress {{ color: {accent_color}; }}
+    .error-text {{
+      margin-top: 4px;
+      min-height: 1.2em;
+      font-size: 0.85rem;
+      color: #FFE8E8;
+    }}
+    .hint {{
+      margin-top: 18px;
+      font-size: 0.8rem;
+      opacity: 0.85;
+    }}
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>{title}</h1>
-    <p>{message}</p>
+    <div class="title">Вам предоставили временный ключ для открытия {display_name}</div>
+    <div class="subtitle">Используйте эту страницу, чтобы разово открыть дверь.</div>
+    <div class="timer">Ключ действует: <span>{remaining_hours}ч {remaining_minutes}м</span></div>
+
+    <div class="button-wrapper">
+      <button class="circle-button" id="open-btn">
+        <div class="icon" id="btn-icon">🔓</div>
+        <div class="label status-progress" id="btn-label">ОТКРЫТЬ</div>
+      </button>
+      <div class="error-text" id="error-text"></div>
+    </div>
+
+    <div class="hint">Не закрывайте страницу, пока дверь открывается.</div>
   </div>
+
+  <script>
+    const btn = document.getElementById('open-btn');
+    const icon = document.getElementById('btn-icon');
+    const label = document.getElementById('btn-label');
+    const errorText = document.getElementById('error-text');
+
+    let resetTimeout = null;
+
+    function setStateIdle() {{
+      btn.classList.remove('disabled');
+      icon.textContent = '🔓';
+      label.textContent = 'ОТКРЫТЬ';
+      label.className = 'label status-progress';
+      errorText.textContent = '';
+    }}
+
+    function setStateProgress() {{
+      btn.classList.add('disabled');
+      icon.textContent = '⏳';
+      label.textContent = 'ОТКРЫВАЕМ...';
+      label.className = 'label status-progress';
+      errorText.textContent = '';
+    }}
+
+    function setStateOk() {{
+      btn.classList.add('disabled');
+      icon.textContent = '✅';
+      label.textContent = 'ОТКРЫТО';
+      label.className = 'label status-ok';
+    }}
+
+    function setStateError(message) {{
+      btn.classList.remove('disabled');
+      icon.textContent = '❌';
+      label.textContent = 'ОШИБКА';
+      label.className = 'label status-error';
+      errorText.textContent = message || 'Произошла ошибка при открытии.';
+    }}
+
+    async function handleClick() {{
+      if (btn.classList.contains('disabled')) {{
+        return;
+      }}
+      window.clearTimeout(resetTimeout);
+      setStateProgress();
+
+      try {{
+        const resp = await fetch(window.location.href, {{ method: 'POST' }});
+        const data = await resp.json();
+
+        if (resp.ok && data.status === 'ok') {{
+          setStateOk();
+          resetTimeout = window.setTimeout(setStateIdle, 5000);
+        }} else {{
+          const msg = data && data.message ? data.message : 'Не удалось открыть дверь.';
+          setStateError(msg);
+        }}
+      }} catch (err) {{
+        setStateError('Ошибка соединения. Попробуйте ещё раз.');
+      }}
+    }}
+
+    btn.addEventListener('click', handleClick);
+  </script>
 </body>
 </html>"""
+
