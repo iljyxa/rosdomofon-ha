@@ -1,7 +1,7 @@
 {
   "domain": "rosdomofon",
   "name": "Росдомофон",
-  "version": "1.1.6",
+  "version": "1.2.0",
   "config_flow": true,
   "documentation": "https://github.com/iljyxa/rosdomofon-ha",
   "issue_tracker": "https://github.com/iljyxa/rosdomofon-ha/issues",

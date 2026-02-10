@@ -356,7 +356,6 @@ def _html_page_with_button(
 <body>
   <div class="card">
     <div class="title">Вам предоставили временный ключ для открытия {display_name}</div>
-    <div class="subtitle">Используйте эту страницу, чтобы разово открыть дверь.</div>
     <div class="timer">Ключ действует: <span>{remaining_hours}ч {remaining_minutes}м</span></div>
 
     <div class="button-wrapper">
