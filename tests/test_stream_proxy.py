@@ -100,3 +100,49 @@ async def test_stream_proxy_allows_expected_host(hass: HomeAssistant):
 
     assert isinstance(response, web.Response)
     assert response.status == 200
+
+
+@pytest.mark.asyncio
+async def test_stream_proxy_rewrites_playlist_urls_with_queries(hass: HomeAssistant):
+    """Прокси должен сохранять query string у HLS URI."""
+    view = RosdomofonStreamProxyView(hass)
+
+    content = await view._rewrite_playlist_urls(
+        '#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="key.bin?token=1"\nsegment.ts?token=2',
+        "39167",
+        "s.rdva68.rosdomofon.com",
+        "live/39167.m3u8",
+    )
+
+    assert (
+        "/api/rosdomofon/stream/39167/s.rdva68.rosdomofon.com/live/key.bin?token=1"
+        in content
+    )
+    assert (
+        "/api/rosdomofon/stream/39167/s.rdva68.rosdomofon.com/live/segment.ts?token=2"
+        in content
+    )
+
+
+@pytest.mark.asyncio
+async def test_stream_proxy_signs_rewritten_playlist_urls(hass: HomeAssistant):
+    """Переписанные HLS URI должны подписываться для последующих запросов."""
+    hass.data["http.auth"] = object()
+    view = RosdomofonStreamProxyView(hass)
+
+    with patch(
+        "custom_components.rosdomofon.stream_proxy._ha_async_sign_path",
+        side_effect=lambda _hass, path, *_args: f"{path}&authSig=test"
+        if "?" in path
+        else f"{path}?authSig=test",
+    ):
+        content = await view._rewrite_playlist_urls(
+            "#EXTM3U\n../dllive/39167/088307.ts",
+            "39167",
+            "s.rdva68.rosdomofon.com",
+            "dllive/39167/index.m3u8",
+        )
+
+    assert "/api/rosdomofon/stream/39167/s.rdva68.rosdomofon.com/dllive/39167/088307.ts" in content
+    assert "../" not in content
+    assert "authSig=test" in content

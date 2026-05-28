@@ -4,8 +4,8 @@
 Поддерживает воспроизведение HLS потоков с авторизацией по bearer токену.
 """
 
-import logging
 import inspect
+import logging
 from datetime import timedelta
 import re
 from typing import Any
@@ -25,7 +25,7 @@ except ImportError:
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.network import get_url
 
-from .const import BASE_URL, DOMAIN
+from .const import CAMERAS_LIST_URL, CAMERA_DETAILS_URL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,9 +53,6 @@ async def _sign_path_compat(hass: HomeAssistant, path: str) -> str:
     return result
 
 
-CAMERAS_LIST_URL = f"{BASE_URL}/abonents-service/api/v2/abonents/cameras"
-
-
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -81,21 +78,33 @@ async def async_setup_entry(
         return
 
     entities = []
+    camera_hosts = hass.data.setdefault(DOMAIN, {}).setdefault("_camera_hosts", {})
     for camera_data in cameras:
         camera_id = camera_data.get("id")
         if not camera_id:
             continue
 
         try:
+            camera_details = None
             rdva_uri = camera_data.get("rdvaUri", "")
+            if not rdva_uri:
+                camera_details = await hass.async_add_executor_job(
+                    _fetch_camera_details, token_manager.access_token, camera_id
+                )
+                rdva_uri = (camera_details or {}).get("rdva", {}).get("uri", "")
+
             if rdva_uri:
+                camera_payload = {**(camera_details or {}), **camera_data}
+                stream_host = _rdva_uri_to_stream_host(rdva_uri)
+                camera_hosts[str(camera_id)] = stream_host
                 entities.append(
                     RosdomofonCamera(
                         token_manager=token_manager,
                         camera_id=camera_id,
-                        camera_name=camera_data.get("name", f"Камера {camera_id}"),
+                        camera_name=camera_payload.get("name", f"Камера {camera_id}"),
                         rdva_uri=rdva_uri,
-                        camera_data=camera_data,
+                        stream_host=stream_host,
+                        camera_data=camera_payload,
                     )
                 )
             else:
@@ -120,21 +129,25 @@ class RosdomofonCamera(Camera):
         camera_id: str,
         camera_name: str,
         rdva_uri: str,
+        stream_host: str,
         camera_data: dict,
     ) -> None:
         super().__init__()
         self._token_manager = token_manager
         self._camera_id = camera_id
         self._camera_name = camera_name
+        self._rdva_uri = rdva_uri
         self._camera_data = camera_data
-        self._stream_source = f"https://s.{rdva_uri}/live/{camera_id}.m3u8"
+        self._stream_source = f"https://{stream_host}/live/{camera_id}.m3u8"
         self._attr_name = camera_name
         self._attr_unique_id = f"rosdomofon_camera_{camera_id}"
         self._attr_supported_features = CameraEntityFeature.STREAM
         self._attr_brand = "Росдомофон"
         self._attr_model = camera_data.get("model", "Unknown")
 
-    async def async_camera_image(self, width: int | None = None, height: int | None = None) -> bytes | None:
+    async def async_camera_image(
+        self, width: int | None = None, height: int | None = None
+    ) -> bytes | None:
         return None
 
     async def stream_source(self) -> str | None:
@@ -150,7 +163,7 @@ class RosdomofonCamera(Camera):
             _LOGGER.error("Некорректный stream_source: %s", self._stream_source)
             return None
 
-        scheme, host, path = m.groups()
+        _, host, path = m.groups()
         try:
             base_url = get_url(self.hass)
         except Exception as exc:
@@ -161,7 +174,12 @@ class RosdomofonCamera(Camera):
         signed_path = await _sign_path_compat(self.hass, proxy_path)
         proxy_url = f"{base_url}{signed_path}"
 
-        _LOGGER.debug("Stream source для камеры %s: %s (прокси для %s)", self.name, proxy_url, self._stream_source)
+        _LOGGER.debug(
+            "Stream source для камеры %s: %s (прокси для %s)",
+            self.name,
+            proxy_url,
+            self._stream_source,
+        )
         return proxy_url
 
     @property
@@ -169,9 +187,17 @@ class RosdomofonCamera(Camera):
         return {
             "camera_id": self._camera_id,
             "stream_url": self._stream_source,
-            "rdva_uri": self._camera_data.get("rdvaUri", ""),
+            "rdva_uri": self._rdva_uri,
             "rtsp_url": self._camera_data.get("rtspUrl", ""),
         }
+
+
+def _rdva_uri_to_stream_host(rdva_uri: str) -> str:
+    """Преобразует rdva URI из API в hostname HLS-сервера."""
+    host = re.sub(r"^https?://", "", rdva_uri).strip("/")
+    if not host.startswith("s."):
+        host = f"s.{host}"
+    return host
 
 
 def _fetch_cameras(access_token: str) -> list[dict]:
@@ -183,3 +209,25 @@ def _fetch_cameras(access_token: str) -> list[dict]:
     response = requests.get(CAMERAS_LIST_URL, headers=headers, timeout=10)
     response.raise_for_status()
     return response.json()
+
+
+def _fetch_camera_details(access_token: str, camera_id: str) -> dict | None:
+    """Получает детальную информацию о камере."""
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+    response = requests.get(
+        CAMERA_DETAILS_URL.format(camera_id=camera_id), headers=headers, timeout=10
+    )
+
+    if response.status_code == 200:
+        return response.json()
+
+    _LOGGER.error(
+        "Ошибка получения деталей камеры %s: %d %s",
+        camera_id,
+        response.status_code,
+        response.text,
+    )
+    return None

@@ -4,7 +4,6 @@
 Содержит фикстуры для настройки тестового окружения Home Assistant.
 """
 
-import asyncio
 import pytest
 import pytest_asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
@@ -13,20 +12,6 @@ from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.rosdomofon.const import DOMAIN
-
-
-@pytest_asyncio.fixture
-async def hass(event_loop):
-    """Фикстура HomeAssistant из pytest-homeassistant-custom-component."""
-    from pytest_homeassistant_custom_component.common import (
-        async_test_home_assistant,
-    )
-
-    hass = await async_test_home_assistant(event_loop)
-    try:
-        yield hass
-    finally:
-        await hass.async_stop()
 
 
 @pytest.fixture
