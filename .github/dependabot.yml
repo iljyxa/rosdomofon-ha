@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # Версии GitHub Actions в workflow-файлах (actions/checkout, actions/setup-python,
+  # hacs/action, home-assistant/actions и т.д.) сейчас никем не отслеживаются —
+  # в .github/workflows/hacs.yml разные шаги вдобавок закреплены на разных
+  # мажорных версиях одного и того же action. Dependabot будет присылать PR
+  # на обновления и заодно постепенно выровняет версии.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
