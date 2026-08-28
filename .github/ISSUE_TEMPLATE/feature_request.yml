@@ -1,0 +1,26 @@
+name: Предложить улучшение
+description: Новая функциональность или улучшение существующей
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую проблему это решает
+      description: Что сейчас нельзя сделать или что неудобно
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Предлагаемое решение
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Рассмотренные альтернативы
+      description: Другие способы решить ту же проблему, если рассматривали
+    validations:
+      required: false
