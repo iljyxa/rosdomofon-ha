@@ -15,7 +15,12 @@ import requests
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.http import KEY_AUTHENTICATED
+
+try:
+    from homeassistant.helpers.http import KEY_AUTHENTICATED
+except ImportError:
+    # HA < 2024.x: KEY_AUTHENTICATED ещё не переехал в helpers.http.
+    from homeassistant.components.http.const import KEY_AUTHENTICATED
 
 try:
     from homeassistant.components.http import async_sign_path as _ha_async_sign_path
