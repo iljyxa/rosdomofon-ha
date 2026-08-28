@@ -3,7 +3,6 @@
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.rosdomofon.const import DOMAIN
 
