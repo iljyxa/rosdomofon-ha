@@ -1,0 +1,69 @@
+name: Сообщить о проблеме
+description: Что-то не работает или работает не так, как ожидалось
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Перед созданием issue проверьте, что похожей проблемы ещё нет в
+        [существующих issues](https://github.com/iljyxa/rosdomofon-ha/issues).
+
+  - type: input
+    id: integration-version
+    attributes:
+      label: Версия интеграции
+      description: Настройки → Устройства и службы → Росдомофон → [версия рядом с названием], либо из HACS
+      placeholder: "1.3.1"
+    validations:
+      required: true
+
+  - type: input
+    id: ha-version
+    attributes:
+      label: Версия Home Assistant
+      placeholder: "2026.8.2"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Описание проблемы
+      description: Что происходит и что вы ожидали увидеть вместо этого
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: debug-log
+    attributes:
+      label: Debug-лог
+      description: |
+        Включите debug-логирование для интеграции и приложите нужные строки:
+        ```yaml
+        logger:
+          default: info
+          logs:
+            custom_components.rosdomofon: debug
+        ```
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Дополнительный контекст
+      description: Всё остальное, что может быть полезно (например, обходные пути, которые уже пробовали)
+    validations:
+      required: false

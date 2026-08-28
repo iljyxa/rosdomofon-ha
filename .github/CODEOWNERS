@@ -1,0 +1,4 @@
+# Автоназначение ревьюера на все PR.
+# См. также "codeowners" в custom_components/rosdomofon/manifest.json (тот
+# используется HACS/hassfest, этот — GitHub).
+* @iljyxa
