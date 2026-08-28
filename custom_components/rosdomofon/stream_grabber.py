@@ -144,8 +144,15 @@ class StreamGrabber:
         split = urlsplit(source)
         if split.path.startswith("/api/rosdomofon/stream/"):
             port = getattr(self._hass.http, "server_port", 8123)
+            # Если HA сама слушает TLS (ssl_certificate настроен — типичный
+            # случай для DuckDNS + Let's Encrypt без отдельного reverse-proxy),
+            # локальный сервер не примет plain HTTP: соединение обрывается
+            # мгновенно (см. _log_ffmpeg_exit — "Error reading HTTP response:
+            # End of file"). Схему выбираем по тому же признаку, каким сама HA
+            # решает поднимать SSL-контекст (homeassistant/components/http).
+            scheme = "https" if getattr(self._hass.http, "ssl_certificate", None) else "http"
             resolved = urlunsplit(
-                ("http", f"127.0.0.1:{port}", split.path, split.query, "")
+                (scheme, f"127.0.0.1:{port}", split.path, split.query, "")
             )
         else:
             resolved = source
@@ -208,6 +215,20 @@ class StreamGrabber:
             "-hide_banner",
             "-loglevel",
             "error",
+        ]
+        parsed_source = urlsplit(source)
+        if parsed_source.scheme == "https" and parsed_source.hostname in (
+            "127.0.0.1",
+            "localhost",
+        ):
+            # HTTPS на локальный HA (см. _resolve_source) — сертификат выписан
+            # на внешний домен, а не на 127.0.0.1/localhost, поэтому обычная
+            # проверка имени хоста в сертификате всегда провалится. Это
+            # заведомо наш собственный HA-инстанс (URL строим сами), а не
+            # обращение к третьей стороне — отключаем verify только для этого
+            # случая, а не глобально для внешних источников.
+            args += ["-tls_verify", "0"]
+        args += [
             "-i",
             source,
             "-an",

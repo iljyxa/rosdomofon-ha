@@ -108,6 +108,7 @@ async def test_resolve_source_rewrites_proxy_base_to_localhost():
     """URL нашего же прокси переписывается на локальный base (127.0.0.1)."""
     grabber, hass = _make_grabber()
     hass.http.server_port = 8123
+    hass.http.ssl_certificate = None  # HA слушает plain HTTP
     proxied = (
         "https://ha.example.com/api/rosdomofon/stream/39167/"
         "s.rdva.rosdomofon.com/live/39167.m3u8?authSig=abc"
@@ -121,6 +122,34 @@ async def test_resolve_source_rewrites_proxy_base_to_localhost():
 
     assert source == (
         "http://127.0.0.1:8123/api/rosdomofon/stream/39167/"
+        "s.rdva.rosdomofon.com/live/39167.m3u8?authSig=abc"
+    )
+
+
+@pytest.mark.asyncio
+async def test_resolve_source_uses_https_when_ha_terminates_tls():
+    """HA слушает TLS напрямую (ssl_certificate настроен) — локальный base на https.
+
+    Реальный кейс: DuckDNS + Let's Encrypt без отдельного reverse-proxy — HA
+    сама принимает только TLS-соединения, plain HTTP на тот же порт рвётся
+    мгновенно (ffmpeg: "Error reading HTTP response: End of file").
+    """
+    grabber, hass = _make_grabber()
+    hass.http.server_port = 8123
+    hass.http.ssl_certificate = "/config/certs/fullchain.pem"
+    proxied = (
+        "https://ha.example.duckdns.org/api/rosdomofon/stream/39167/"
+        "s.rdva.rosdomofon.com/live/39167.m3u8?authSig=abc"
+    )
+
+    with patch(
+        "custom_components.rosdomofon.stream_grabber.async_get_stream_source",
+        AsyncMock(return_value=proxied),
+    ):
+        source = await grabber._resolve_source()
+
+    assert source == (
+        "https://127.0.0.1:8123/api/rosdomofon/stream/39167/"
         "s.rdva.rosdomofon.com/live/39167.m3u8?authSig=abc"
     )
 
