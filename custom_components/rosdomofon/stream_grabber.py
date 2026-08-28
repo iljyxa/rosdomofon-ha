@@ -36,6 +36,18 @@ _OUTPUT_FPS = 1
 _RESTART_DELAY = 5
 # Кадр считается свежим не дольше этого времени; иначе поток завис или умер.
 _FRAME_TTL = 15.0
+# Подписанный URL плейлиста, который ffmpeg держит открытым, живёт 5 минут
+# (жёстко в camera.py: HA async_sign_path требует expiration позиционным
+# аргументом без дефолта, поэтому _sign_path_compat всегда попадает в
+# fallback timedelta(minutes=5)). ffmpeg переопрашивает этот же URL для
+# live-плейлиста всё время жизни процесса — если не пересоздать сессию
+# заранее, через 5 минут прокси начнёт отвечать 401 и это выглядело бы как
+# обрыв потока. Ротируем сессию проактивно, с запасом.
+_MAX_SESSION_SECONDS = 240
+# Кадр без EOI дольше этого объёма считаем битым/десинхронизированным и
+# сбрасываем буфер целиком — иначе при потерянном EOI буфер рос бы
+# неограниченно вплоть до перезапуска всего процесса ffmpeg.
+_MAX_PENDING_FRAME_BYTES = 5 * 1024 * 1024
 
 
 class StreamGrabber:
@@ -249,28 +261,49 @@ class StreamGrabber:
         stdout = self._proc.stdout
         assert stdout is not None
         buf = bytearray()
+        started_at = self._hass.loop.time()
+        planned_rotation = False
         try:
             while not self._closing:
+                if self._hass.loop.time() - started_at > _MAX_SESSION_SECONDS:
+                    # Проактивная ротация до истечения подписи URL (см.
+                    # _MAX_SESSION_SECONDS) — это ожидаемое пересоздание
+                    # процесса, а не сбой, поэтому не логируем как ошибку.
+                    planned_rotation = True
+                    break
                 chunk = await stdout.read(65536)
                 if not chunk:
                     break  # ffmpeg завершился — выходим на перезапуск
                 buf.extend(chunk)
                 self._extract_frames(buf)
         finally:
-            if not self._closing:
-                # ffmpeg завершился сам (не мы его остановили) — до сих пор
-                # это было видно только по факту молчания (нет кадров, нет
-                # ошибки: -loglevel error + DEVNULL для stderr выбрасывали
-                # единственную подсказку о причине). Читаем накопленный
-                # stderr, пока процесс ещё не убит _terminate_proc().
+            if not self._closing and not planned_rotation:
+                # ffmpeg завершился сам (не мы его остановили и не плановая
+                # ротация) — до сих пор это было видно только по факту
+                # молчания (нет кадров, нет ошибки: -loglevel error + DEVNULL
+                # для stderr выбрасывали единственную подсказку о причине).
+                # Читаем накопленный stderr, пока процесс ещё не убит
+                # _terminate_proc().
                 await self._log_ffmpeg_exit()
             await self._terminate_proc()
+        if planned_rotation:
+            _LOGGER.debug(
+                "Grabber %s: плановая ротация ffmpeg (обновление подписи URL)",
+                self._camera,
+            )
 
     async def _log_ffmpeg_exit(self) -> None:
         """Логирует причину неожиданного завершения ffmpeg (код + stderr)."""
         proc = self._proc
         if proc is None:
             return
+        # stdout уже закрылся, но это не гарантирует, что asyncio успел
+        # обработать завершение процесса и заполнить returncode — ждём явно,
+        # иначе он может по гонке всё ещё оставаться None в логе.
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=2)
+        except asyncio.TimeoutError:
+            pass
         stderr_text = ""
         if proc.stderr is not None:
             try:
@@ -297,9 +330,35 @@ class StreamGrabber:
                 return
             if start > 0:
                 del buf[:start]
-            end = buf.find(_JPEG_EOI, 2)
+
+            # Если раньше EOI встречается ещё один SOI — текущий кадр битый
+            # или недописанный (в валидных JPEG-данных байты EOI 0xFFD9 не
+            # могут появиться внутри scan-секции из-за byte-stuffing, так что
+            # такое сочетание — признак десинхронизации, не совпадение).
+            # Отбрасываем всё до второго SOI и пробуем снова с него — иначе
+            # EOI второго кадра склеился бы с началом первого в один битый
+            # снимок вместо ожидаемого "кадр ещё не дочитан".
+            next_start = buf.find(_JPEG_SOI, len(_JPEG_SOI))
+            end = buf.find(_JPEG_EOI, len(_JPEG_SOI))
+            if next_start != -1 and (end == -1 or next_start < end):
+                del buf[:next_start]
+                continue
+
             if end == -1:
+                if len(buf) > _MAX_PENDING_FRAME_BYTES:
+                    # EOI так и не нашёлся на разумном объёме — кадр битый,
+                    # а не просто "ещё не дочитан". Без этого буфер рос бы
+                    # неограниченно вплоть до следующего перезапуска ffmpeg.
+                    self._log_issue(
+                        "frame_too_large",
+                        "Grabber %s: не найден конец JPEG-кадра за %d МБ, "
+                        "сбрасываю буфер",
+                        self._camera,
+                        _MAX_PENDING_FRAME_BYTES // (1024 * 1024),
+                    )
+                    buf.clear()
                 return  # кадр ещё не дочитан
+
             end += 2
             self._latest = bytes(buf[:end])
             self._latest_at = self._hass.loop.time()

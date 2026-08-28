@@ -1,11 +1,18 @@
 """Тесты для stream_grabber (постоянный ffmpeg-читатель потока камеры)."""
 
 import logging
+import sys
+import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.rosdomofon.stream_grabber import StreamGrabber, _FRAME_TTL
+from custom_components.rosdomofon.stream_grabber import (
+    StreamGrabber,
+    _FRAME_TTL,
+    _MAX_PENDING_FRAME_BYTES,
+    _MAX_SESSION_SECONDS,
+)
 
 _LOGGER_NAME = "custom_components.rosdomofon.stream_grabber"
 
@@ -322,6 +329,7 @@ async def test_log_ffmpeg_exit_includes_stderr_and_return_code(caplog):
     caplog.set_level(logging.WARNING, logger=_LOGGER_NAME)
 
     fake_proc = MagicMock()
+    fake_proc.wait = AsyncMock(return_value=1)
     fake_proc.returncode = 1
     fake_proc.stderr = MagicMock()
     fake_proc.stderr.read = AsyncMock(return_value=b"Server returned 404 Not Found\n")
@@ -332,6 +340,7 @@ async def test_log_ffmpeg_exit_includes_stderr_and_return_code(caplog):
     warnings = [r for r in caplog.records if r.name == _LOGGER_NAME]
     assert len(warnings) == 1
     assert "404" in warnings[0].message
+    fake_proc.wait.assert_awaited_once()
     assert "1" in warnings[0].message
 
 
@@ -341,3 +350,85 @@ async def test_log_ffmpeg_exit_without_proc_does_not_raise():
     grabber, _hass = _make_grabber()
     grabber._proc = None
     await grabber._log_ffmpeg_exit()  # не должно падать
+
+
+# -- Ресинхронизация и предел размера буфера кадров -------------------------
+
+
+def test_extract_frames_resyncs_on_second_soi_before_eoi():
+    """Второй SOI раньше EOI — первый (битый/недописанный) кадр отбрасывается.
+
+    В валидных JPEG-данных байты EOI (0xFFD9) не могут встретиться внутри
+    scan-секции — их предотвращает byte-stuffing. Поэтому "SOI ... SOI ...
+    EOI" без EOI между двумя SOI — это десинхронизация, а не совпадение:
+    наивный поиск первого EOI склеил бы хвост второго кадра с началом
+    первого в один битый снимок.
+    """
+    grabber, _hass = _make_grabber()
+    broken_frame_start = b"\xff\xd8" + b"garbage-without-eoi"
+    good_frame = b"\xff\xd8" + b"payload" + b"\xff\xd9"
+    buf = bytearray(broken_frame_start + good_frame)
+
+    grabber._extract_frames(buf)
+
+    assert grabber.latest_frame() == good_frame
+
+
+def test_extract_frames_caps_unbounded_pending_frame(caplog):
+    """Кадр без EOI дольше лимита сбрасывает буфер целиком, а не растёт вечно."""
+    grabber, _hass = _make_grabber()
+    caplog.set_level(logging.WARNING, logger=_LOGGER_NAME)
+    buf = bytearray(b"\xff\xd8" + b"x" * (_MAX_PENDING_FRAME_BYTES + 1))
+
+    grabber._extract_frames(buf)
+
+    assert grabber.latest_frame() is None
+    assert len(buf) == 0
+    warnings = [r for r in caplog.records if r.name == _LOGGER_NAME]
+    assert len(warnings) == 1
+
+
+# -- Плановая ротация ffmpeg-сессии до истечения подписи URL ----------------
+
+
+@pytest.mark.asyncio
+async def test_pump_rotates_session_before_url_signature_expires():
+    """Сессия завершается плановой ротацией, а не как ошибка ffmpeg.
+
+    Подписанный URL живёт 5 минут (camera._sign_path_compat), а ffmpeg
+    держит его открытым всё время жизни процесса — без проактивной ротации
+    прокси начал бы отвечать 401 и это выглядело бы как обрыв потока.
+    """
+    grabber, hass = _make_grabber()
+
+    fake_proc = MagicMock()
+    fake_proc.returncode = 0
+    fake_proc.stdout = MagicMock()
+    fake_proc.stdout.read = AsyncMock(return_value=b"\xff\xd8\xff\xd9")
+    fake_proc.stderr = MagicMock()
+
+    call_count = {"n": 0}
+
+    def fake_time():
+        call_count["n"] += 1
+        # Первый вызов — started_at; второй (проверка в цикле) — уже "истекло".
+        return 0.0 if call_count["n"] == 1 else _MAX_SESSION_SECONDS + 1
+
+    hass.loop.time.side_effect = fake_time
+
+    async def fake_create_subprocess_exec(*_args, **_kwargs):
+        return fake_proc
+
+    fake_ffmpeg_module = types.SimpleNamespace(
+        get_ffmpeg_manager=lambda _hass: MagicMock(binary="ffmpeg")
+    )
+
+    with patch("asyncio.create_subprocess_exec", fake_create_subprocess_exec), \
+         patch.dict(sys.modules, {"homeassistant.components.ffmpeg": fake_ffmpeg_module}), \
+         patch.object(grabber, "_terminate_proc", AsyncMock()) as mock_terminate, \
+         patch.object(grabber, "_log_ffmpeg_exit", AsyncMock()) as mock_log_exit:
+        await grabber._pump("http://127.0.0.1:8123/api/rosdomofon/stream/x")
+
+    mock_log_exit.assert_not_awaited()
+    mock_terminate.assert_awaited_once()
+    fake_proc.stdout.read.assert_not_called()
