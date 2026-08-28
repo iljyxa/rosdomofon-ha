@@ -49,6 +49,25 @@ class StreamGrabber:
         self._closing = False
         self._latest: bytes | None = None
         self._latest_at: float = 0.0
+        # Ключ последней залогированной на уровне warning проблемы (или None).
+        # Супервизор ретраит каждые несколько секунд бесконечно — без этого
+        # одна и та же причина спамила бы лог вечно на warning; вместо этого
+        # предупреждаем один раз при появлении/смене проблемы, дальше — debug.
+        self._last_issue: str | None = None
+
+    def _log_issue(self, key: str, message: str, *args) -> None:
+        """Warning при первом появлении/смене проблемы, иначе debug (не спамим)."""
+        if self._last_issue != key:
+            _LOGGER.warning(message, *args)
+            self._last_issue = key
+        else:
+            _LOGGER.debug(message, *args)
+
+    def _clear_issue(self) -> None:
+        """Сбрасывает признак проблемы, когда чтение потока снова заработало."""
+        if self._last_issue is not None:
+            _LOGGER.info("Grabber %s: поток восстановлен", self._camera)
+            self._last_issue = None
 
     @property
     def camera(self) -> str:
@@ -113,9 +132,14 @@ class StreamGrabber:
         try:
             source = await async_get_stream_source(self._hass, self._camera)
         except Exception as exc:  # noqa: BLE001 — источник может быть не готов
-            _LOGGER.debug("Нет stream_source для %s: %s", self._camera, exc)
+            self._log_issue(
+                "no_source", "Grabber %s: нет stream_source: %s", self._camera, exc
+            )
             return None
         if not source:
+            self._log_issue(
+                "no_source", "Grabber %s: stream_source пуст", self._camera
+            )
             return None
         split = urlsplit(source)
         if split.path.startswith("/api/rosdomofon/stream/"):
@@ -136,8 +160,32 @@ class StreamGrabber:
                 await self._pump(source)
             except asyncio.CancelledError:
                 raise
+            except ValueError as exc:
+                # get_ffmpeg_manager() кидает именно ValueError, если компонент
+                # ffmpeg не поднят — самая частая причина: "ffmpeg" не указан
+                # в dependencies манифеста интеграции, либо HA не был полностью
+                # перезапущен после обновления интеграции (одного reload
+                # config entry для новой зависимости манифеста недостаточно).
+                self._log_issue(
+                    "ffmpeg_not_ready",
+                    "Grabber %s: компонент ffmpeg не настроен в HA (%s) — "
+                    "проверьте, что 'ffmpeg' есть в dependencies манифеста "
+                    "интеграции и что HA был полностью перезапущен",
+                    self._camera,
+                    exc,
+                )
+            except FileNotFoundError as exc:
+                self._log_issue(
+                    "ffmpeg_binary_missing",
+                    "Grabber %s: не удалось запустить ffmpeg (%s) — проверьте, "
+                    "что бинарник ffmpeg установлен и доступен на хосте Home Assistant",
+                    self._camera,
+                    exc,
+                )
             except Exception as exc:  # noqa: BLE001 — логируем и перезапускаем
-                _LOGGER.debug("Grabber %s: ошибка чтения потока: %s", self._camera, exc)
+                self._log_issue(
+                    "pump_error", "Grabber %s: ошибка чтения потока: %s", self._camera, exc
+                )
             if not self._closing:
                 await asyncio.sleep(_RESTART_DELAY)
 
@@ -205,3 +253,4 @@ class StreamGrabber:
             self._latest = bytes(buf[:end])
             self._latest_at = self._hass.loop.time()
             del buf[:end]
+            self._clear_issue()

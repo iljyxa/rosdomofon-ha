@@ -1,10 +1,13 @@
 """Тесты для stream_grabber (постоянный ffmpeg-читатель потока камеры)."""
 
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from custom_components.rosdomofon.stream_grabber import StreamGrabber, _FRAME_TTL
+
+_LOGGER_NAME = "custom_components.rosdomofon.stream_grabber"
 
 
 def _make_grabber(now: float = 1000.0) -> tuple[StreamGrabber, MagicMock]:
@@ -183,3 +186,96 @@ async def test_async_stop_without_start_does_not_raise():
     grabber, _hass = _make_grabber()
     await grabber.async_stop()
     assert grabber.latest_frame() is None
+
+
+# -- Видимость проблем в логе (warn once, потом debug; сброс при восстановлении) --
+
+
+def test_log_issue_warns_once_then_downgrades_to_debug(caplog):
+    """Одна и та же причина логируется на warning только при первом появлении."""
+    grabber, _hass = _make_grabber()
+    caplog.set_level(logging.DEBUG, logger=_LOGGER_NAME)
+
+    grabber._log_issue("no_source", "проблема: %s", "test")
+    grabber._log_issue("no_source", "проблема: %s", "test")
+
+    records = [r for r in caplog.records if r.name == _LOGGER_NAME]
+    assert [r.levelno for r in records] == [logging.WARNING, logging.DEBUG]
+
+
+def test_log_issue_warns_again_when_reason_changes(caplog):
+    """Смена причины проблемы — новый warning, а не подавляется предыдущей."""
+    grabber, _hass = _make_grabber()
+    caplog.set_level(logging.DEBUG, logger=_LOGGER_NAME)
+
+    grabber._log_issue("no_source", "нет источника")
+    grabber._log_issue("ffmpeg_binary_missing", "нет ffmpeg")
+
+    warnings = [r for r in caplog.records if r.name == _LOGGER_NAME and r.levelno == logging.WARNING]
+    assert len(warnings) == 2
+
+
+def test_clear_issue_logs_recovery_only_if_issue_was_set(caplog):
+    """clear_issue логирует восстановление только если проблема реально была."""
+    grabber, _hass = _make_grabber()
+    caplog.set_level(logging.INFO, logger=_LOGGER_NAME)
+
+    grabber._clear_issue()
+    assert not [r for r in caplog.records if r.name == _LOGGER_NAME]
+
+    grabber._last_issue = "no_source"
+    grabber._clear_issue()
+
+    assert grabber._last_issue is None
+    assert any(r.name == _LOGGER_NAME for r in caplog.records)
+
+
+def test_extract_frames_clears_issue_on_successful_frame():
+    """Успешное извлечение кадра сбрасывает признак предыдущей проблемы."""
+    grabber, _hass = _make_grabber()
+    grabber._last_issue = "pump_error"
+
+    buf = bytearray(b"\xff\xd8" + b"payload" + b"\xff\xd9")
+    grabber._extract_frames(buf)
+
+    assert grabber._last_issue is None
+
+
+@pytest.mark.asyncio
+async def test_run_gives_actionable_message_when_ffmpeg_component_not_ready(caplog):
+    """ValueError из get_ffmpeg_manager (ffmpeg-компонент не поднят) — понятный warning."""
+    grabber, _hass = _make_grabber()
+    caplog.set_level(logging.WARNING, logger=_LOGGER_NAME)
+
+    async def fake_pump(_source):
+        grabber._closing = True  # прерываем супервизор после первой попытки
+        raise ValueError("ffmpeg component not initialized")
+
+    with patch.object(grabber, "_resolve_source", AsyncMock(return_value="http://x/y")), \
+         patch.object(grabber, "_pump", fake_pump), \
+         patch("asyncio.sleep", AsyncMock()):
+        await grabber._run()
+
+    warnings = [r for r in caplog.records if r.name == _LOGGER_NAME]
+    assert len(warnings) == 1
+    assert "dependencies" in warnings[0].message
+
+
+@pytest.mark.asyncio
+async def test_run_gives_actionable_message_when_ffmpeg_binary_missing(caplog):
+    """FileNotFoundError при запуске ffmpeg — понятный warning про бинарник на хосте."""
+    grabber, _hass = _make_grabber()
+    caplog.set_level(logging.WARNING, logger=_LOGGER_NAME)
+
+    async def fake_pump(_source):
+        grabber._closing = True
+        raise FileNotFoundError("ffmpeg")
+
+    with patch.object(grabber, "_resolve_source", AsyncMock(return_value="http://x/y")), \
+         patch.object(grabber, "_pump", fake_pump), \
+         patch("asyncio.sleep", AsyncMock()):
+        await grabber._run()
+
+    warnings = [r for r in caplog.records if r.name == _LOGGER_NAME]
+    assert len(warnings) == 1
+    assert "бинарник" in warnings[0].message
