@@ -26,6 +26,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.network import get_url
 
 from .const import CAMERAS_LIST_URL, CAMERA_DETAILS_URL, DOMAIN
+from .stream_grabber import StreamGrabber
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -144,11 +145,33 @@ class RosdomofonCamera(Camera):
         self._attr_supported_features = CameraEntityFeature.STREAM
         self._attr_brand = "Росдомофон"
         self._attr_model = camera_data.get("model", "Unknown")
+        self._grabber: StreamGrabber | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Запускает постоянный читатель потока камеры (свежие снимки)."""
+        await super().async_added_to_hass()
+        self._grabber = StreamGrabber(self.hass, self.entity_id)
+        self._grabber.start()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Останавливает читатель потока при удалении сущности."""
+        if self._grabber is not None:
+            await self._grabber.async_stop()
+            self._grabber = None
+        await super().async_will_remove_from_hass()
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
-        return None
+        """Возвращает последний кадр из постоянного читателя потока.
+
+        None, если читатель ещё не запущен (сущность только добавляется) или
+        поток завис/недоступен — в этом случае HA сам попробует получить кадр
+        через stream_source() при необходимости.
+        """
+        if self._grabber is None:
+            return None
+        return self._grabber.latest_frame()
 
     async def stream_source(self) -> str | None:
         """Возвращает URL HLS потока через прокси с авторизацией."""
