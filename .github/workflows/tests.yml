@@ -13,8 +13,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11"]
-        ha-version: ["2023.9.0"]
+        include:
+          # Минимальная заявленная версия (hacs.json: homeassistant >= 2023.9) —
+          # обязательная проверка, что интеграция не сломала обратную совместимость.
+          - python-version: "3.11"
+            ha-version: "2023.9.0"
+            phacc-version: "0.13.54"
+          # Свежая версия HA — ловит поломки от изменений API самой Home Assistant
+          # (как в issue #4) раньше, чем о них сообщат пользователи. Может падать
+          # из-за требований к версии Python/зависимостям на стороне HA — не блокирует
+          # мердж (continue-on-error), но сигнал важно видеть.
+          - python-version: "3.11"
+            ha-version: "latest"
+            phacc-version: "latest"
+
+    continue-on-error: ${{ matrix.ha-version == 'latest' }}
 
     steps:
       - name: Checkout
@@ -30,9 +43,13 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install \
-            "pytest-homeassistant-custom-component==0.13.54" \
-            "homeassistant==${{ matrix.ha-version }}"
+          if [ "${{ matrix.ha-version }}" = "latest" ]; then
+            pip install pytest-homeassistant-custom-component homeassistant
+          else
+            pip install \
+              "pytest-homeassistant-custom-component==${{ matrix.phacc-version }}" \
+              "homeassistant==${{ matrix.ha-version }}"
+          fi
 
       - name: Run tests
         env:
