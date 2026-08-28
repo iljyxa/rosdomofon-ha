@@ -1,0 +1,65 @@
+name: Release
+
+# Автоматически создаёт GitHub Release при пуше тега версии (например 1.4.0).
+# Release notes собираются из сообщений коммитов, добавленных с прошлого тега.
+# Перед созданием релиза проверяет, что version в manifest.json совпадает с тегом.
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Проверить, что manifest.json соответствует тегу
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          MANIFEST_VERSION=$(python3 -c "import json; print(json.load(open('custom_components/rosdomofon/manifest.json'))['version'])")
+          if [ "$TAG" != "$MANIFEST_VERSION" ]; then
+            echo "::error::Тег $TAG не совпадает с version в manifest.json ($MANIFEST_VERSION). Обновите manifest.json перед релизом."
+            exit 1
+          fi
+
+      - name: Собрать release notes
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          # Ближайший предыдущий тег версии на истории (если есть)
+          PREV=$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' "${TAG}^" 2>/dev/null || true)
+
+          {
+            echo "## Изменения"
+            echo ""
+            if [ -n "$PREV" ]; then
+              git log --no-merges --pretty=format:'- %s' "${PREV}..${TAG}"
+              echo ""
+              echo ""
+              echo "**Полный список изменений:** https://github.com/${GITHUB_REPOSITORY}/compare/${PREV}...${TAG}"
+            else
+              git log --no-merges --pretty=format:'- %s' "${TAG}"
+            fi
+            echo ""
+          } > release_notes.md
+
+          echo "Release notes для ${TAG} (с ${PREV:-начала}):"
+          cat release_notes.md
+
+      - name: Создать или обновить релиз
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TAG" --notes-file release_notes.md --latest
+          else
+            gh release create "$TAG" --title "$TAG" --notes-file release_notes.md --latest
+          fi
