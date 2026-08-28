@@ -279,3 +279,36 @@ async def test_run_gives_actionable_message_when_ffmpeg_binary_missing(caplog):
     warnings = [r for r in caplog.records if r.name == _LOGGER_NAME]
     assert len(warnings) == 1
     assert "бинарник" in warnings[0].message
+
+
+@pytest.mark.asyncio
+async def test_log_ffmpeg_exit_includes_stderr_and_return_code(caplog):
+    """При тихом завершении ffmpeg (без исключения) в лог попадает stderr.
+
+    Раньше stderr уходил в DEVNULL и такое завершение было полностью
+    неразличимо от нормальной работы — единственная причина, по которой это
+    сейчас можно диагностировать без правки кода на лету.
+    """
+    grabber, _hass = _make_grabber()
+    caplog.set_level(logging.WARNING, logger=_LOGGER_NAME)
+
+    fake_proc = MagicMock()
+    fake_proc.returncode = 1
+    fake_proc.stderr = MagicMock()
+    fake_proc.stderr.read = AsyncMock(return_value=b"Server returned 404 Not Found\n")
+    grabber._proc = fake_proc
+
+    await grabber._log_ffmpeg_exit()
+
+    warnings = [r for r in caplog.records if r.name == _LOGGER_NAME]
+    assert len(warnings) == 1
+    assert "404" in warnings[0].message
+    assert "1" in warnings[0].message
+
+
+@pytest.mark.asyncio
+async def test_log_ffmpeg_exit_without_proc_does_not_raise():
+    """_log_ffmpeg_exit() без активного процесса (гонка при остановке) безопасен."""
+    grabber, _hass = _make_grabber()
+    grabber._proc = None
+    await grabber._log_ffmpeg_exit()  # не должно падать

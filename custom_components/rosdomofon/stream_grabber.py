@@ -144,10 +144,13 @@ class StreamGrabber:
         split = urlsplit(source)
         if split.path.startswith("/api/rosdomofon/stream/"):
             port = getattr(self._hass.http, "server_port", 8123)
-            return urlunsplit(
+            resolved = urlunsplit(
                 ("http", f"127.0.0.1:{port}", split.path, split.query, "")
             )
-        return source
+        else:
+            resolved = source
+        _LOGGER.debug("Grabber %s: источник для ffmpeg: %s", self._camera, resolved)
+        return resolved
 
     async def _run(self) -> None:
         """Супервизор: держит ffmpeg живым, перезапускает при обрыве."""
@@ -219,7 +222,7 @@ class StreamGrabber:
         self._proc = await asyncio.create_subprocess_exec(
             *args,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
         _LOGGER.debug("Grabber %s: ffmpeg запущен", self._camera)
         stdout = self._proc.stdout
@@ -233,7 +236,34 @@ class StreamGrabber:
                 buf.extend(chunk)
                 self._extract_frames(buf)
         finally:
+            if not self._closing:
+                # ffmpeg завершился сам (не мы его остановили) — до сих пор
+                # это было видно только по факту молчания (нет кадров, нет
+                # ошибки: -loglevel error + DEVNULL для stderr выбрасывали
+                # единственную подсказку о причине). Читаем накопленный
+                # stderr, пока процесс ещё не убит _terminate_proc().
+                await self._log_ffmpeg_exit()
             await self._terminate_proc()
+
+    async def _log_ffmpeg_exit(self) -> None:
+        """Логирует причину неожиданного завершения ffmpeg (код + stderr)."""
+        proc = self._proc
+        if proc is None:
+            return
+        stderr_text = ""
+        if proc.stderr is not None:
+            try:
+                data = await asyncio.wait_for(proc.stderr.read(4096), timeout=2)
+                stderr_text = data.decode(errors="replace").strip()
+            except Exception:  # noqa: BLE001 — диагностика не должна падать сама
+                pass
+        self._log_issue(
+            "ffmpeg_exited",
+            "Grabber %s: ffmpeg неожиданно завершился (код %s)%s",
+            self._camera,
+            proc.returncode,
+            f" — {stderr_text}" if stderr_text else " (stderr пуст)",
+        )
 
     def _extract_frames(self, buf: bytearray) -> None:
         """Вырезает завершённые JPEG из буфера и сохраняет последний."""
