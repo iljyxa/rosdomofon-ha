@@ -291,8 +291,17 @@ class RosdomofonStreamProxyView(HomeAssistantView):
             new_path = parsed_url.path.lstrip("/")
         elif url.startswith("/"):
             new_path = parsed_url.path.lstrip("/")
-        elif base_path:
+        elif base_path and not parsed_url.path.startswith("../"):
             new_path = f"{base_path}/{parsed_url.path}"
+        elif parsed_url.path.startswith("../"):
+            # HLS-плейлисты Росдомофон иногда ссылаются на сегменты через
+            # "../<camera_id>/<file>" — это не настоящая навигация вверх по
+            # каталогам от текущего плейлиста, путь уже полный сам по себе.
+            # Обычное posixpath-присоединение к base_path задвоило бы часть
+            # пути (например "dllive/dllive/39167/..."), поэтому ведущие
+            # "../" здесь просто отбрасываем, а не резолвим относительно
+            # base_path.
+            new_path = re.sub(r"^(\.\./)+", "", parsed_url.path)
         else:
             new_path = parsed_url.path
         new_path = posixpath.normpath(new_path).lstrip("/")
