@@ -11,12 +11,12 @@ jobs:
   hacs:
     runs-on: "ubuntu-latest"
     steps:
-      - uses: "actions/checkout@v2"
+      - uses: "actions/checkout@v7"
       - uses: "hacs/action@main"
         with: { category: "integration" }
         continue-on-error: true
   hassfest:
     runs-on: "ubuntu-latest"
     steps:
-      - uses: "actions/checkout@v3"
+      - uses: "actions/checkout@v7"
       - uses: "home-assistant/actions/hassfest@master"
