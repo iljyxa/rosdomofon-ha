@@ -3,7 +3,7 @@
 import time
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
-from aiohttp import web, hdrs
+from aiohttp import hdrs
 from homeassistant.core import HomeAssistant
 
 from custom_components.rosdomofon.share import ShareLinkManager, ShareLink, ExternalURLNotAvailable

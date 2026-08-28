@@ -1,4 +1,3 @@
-from homeassistant.exceptions import ConfigEntryNotReady
 """
 Интеграция Росдомофон для Home Assistant.
 
@@ -11,6 +10,7 @@ import logging
 
 import voluptuous as vol
 from homeassistant.components import persistent_notification
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN, SHARE_LINK_DEFAULT_TTL_HOURS
