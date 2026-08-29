@@ -115,7 +115,11 @@ class RosdomofonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             refresh_token = user_input["refresh_token"].strip()
             self._tok = await self._exchange_refresh_token(refresh_token)
-            if self._tok:
+            # Помимо ответа с ошибкой (None) отбраковываем и «пустой» успех
+            # без обязательных полей — TokenManager не сможет с ним работать
+            # (access_token нужен для запросов, expires_in — чтобы понять,
+            # когда токен истекает).
+            if self._tok and self._tok.get("access_token") and "expires_in" in self._tok:
                 self._tok["timestamp"] = int(time.time())
                 return self._create_entry()
             errors["base"] = "invalid_refresh_token"
@@ -156,7 +160,14 @@ class RosdomofonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def _create_entry(self):
         """Создаёт config entry с данными авторизации."""
-        title = f"Росдомофон ({self._phone})" if self._phone else "Росдомофон (по токену)"
+        if self._phone:
+            title = f"Росдомофон ({self._phone})"
+        else:
+            # Номер телефона неизвестен (вход по refresh_token) — добавляем
+            # хвост access_token, чтобы несколько таких записей можно было
+            # различить в списке интеграций.
+            token_suffix = (self._tok or {}).get("access_token", "")[-4:]
+            title = f"Росдомофон (токен …{token_suffix})" if token_suffix else "Росдомофон (по токену)"
         return self.async_create_entry(
             title=title,
             data={
@@ -184,17 +195,10 @@ class RosdomofonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             _LOGGER.error("Ошибка запроса SMS: %s", exc)
         return False
 
-    async def _get_token(self, phone: str, sms_code: str) -> dict | None:
-        """Получает OAuth-токен по номеру телефона и SMS-коду."""
+    async def _request_token(self, payload: dict, log_context: str) -> dict | None:
+        """Отправляет запрос на oauth/token и возвращает разобранный ответ."""
         try:
             session = aiohttp_client.async_get_clientsession(self.hass)
-            payload = {
-                "grant_type": GRANT_TYPE_MOBILE,
-                "client_id": CLIENT_ID,
-                "phone": phone,
-                "sms_code": sms_code,
-                "company": COMPANY_NAME,
-            }
             async with session.post(
                 TOKEN_REQUEST_URL,
                 data=payload,
@@ -202,40 +206,41 @@ class RosdomofonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 timeout=_REQUEST_TIMEOUT,
             ) as resp:
                 if resp.status == 200:
-                    _LOGGER.debug("Токен получен успешно")
+                    _LOGGER.debug("Токен получен успешно (%s)", log_context)
                     return await resp.json()
                 _LOGGER.error(
-                    "Ошибка получения токена: %d %s",
+                    "Ошибка получения токена (%s): %d %s",
+                    log_context,
                     resp.status,
                     await resp.text(),
                 )
-        except (aiohttp.ClientError, TimeoutError) as exc:
-            _LOGGER.error("Ошибка запроса токена: %s", exc)
+        except (aiohttp.ClientError, TimeoutError, ValueError) as exc:
+            # ValueError покрывает и ошибку разбора JSON в ответе (json.JSONDecodeError).
+            _LOGGER.error("Ошибка запроса токена (%s): %s", log_context, exc)
         return None
+
+    async def _get_token(self, phone: str, sms_code: str) -> dict | None:
+        """Получает OAuth-токен по номеру телефона и SMS-коду."""
+        payload = {
+            "grant_type": GRANT_TYPE_MOBILE,
+            "client_id": CLIENT_ID,
+            "phone": phone,
+            "sms_code": sms_code,
+            "company": COMPANY_NAME,
+        }
+        return await self._request_token(payload, "SMS")
 
     async def _exchange_refresh_token(self, refresh_token: str) -> dict | None:
         """Обменивает готовый refresh_token на access_token."""
-        try:
-            session = aiohttp_client.async_get_clientsession(self.hass)
-            payload = {
-                "grant_type": GRANT_TYPE_REFRESH,
-                "client_id": CLIENT_ID,
-                "refresh_token": refresh_token,
-            }
-            async with session.post(
-                TOKEN_REQUEST_URL,
-                data=payload,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-                timeout=_REQUEST_TIMEOUT,
-            ) as resp:
-                if resp.status == 200:
-                    _LOGGER.debug("Токен по refresh_token получен успешно")
-                    return await resp.json()
-                _LOGGER.error(
-                    "Ошибка обмена refresh_token: %d %s",
-                    resp.status,
-                    await resp.text(),
-                )
-        except (aiohttp.ClientError, TimeoutError) as exc:
-            _LOGGER.error("Ошибка запроса обмена refresh_token: %s", exc)
-        return None
+        payload = {
+            "grant_type": GRANT_TYPE_REFRESH,
+            "client_id": CLIENT_ID,
+            "refresh_token": refresh_token,
+        }
+        tok = await self._request_token(payload, "refresh_token")
+        if tok is not None and not tok.get("refresh_token"):
+            # OAuth2-сервер может не вернуть новый refresh_token в ответе,
+            # если он не изменился — сохраняем тот, что ввёл пользователь,
+            # чтобы TokenManager мог обновлять токен и дальше.
+            tok["refresh_token"] = refresh_token
+        return tok

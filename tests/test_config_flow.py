@@ -163,9 +163,11 @@ async def test_token_step_success(hass: HomeAssistant, aioclient_mock):
     )
 
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Росдомофон (по токену)"
+    # Номер телефона неизвестен — заголовок различает записи по хвосту токена.
+    assert result["title"] == "Росдомофон (токен …oken)"
     assert result["data"]["phone"] is None
     assert result["data"]["token_data"]["access_token"] == "new_access_token"
+    assert result["data"]["token_data"]["refresh_token"] == "new_refresh_token"
     assert "timestamp" in result["data"]["token_data"]
 
     # Запрос должен уйти именно с grant_type=refresh_token и переданным токеном
@@ -173,6 +175,75 @@ async def test_token_step_success(hass: HomeAssistant, aioclient_mock):
     sent_data = call[2]
     assert sent_data["grant_type"] == "refresh_token"
     assert sent_data["refresh_token"] == "existing_refresh_token"
+
+
+async def test_token_step_response_without_new_refresh_token(hass: HomeAssistant, aioclient_mock):
+    """Если сервер не вернул новый refresh_token, сохраняем введённый пользователем.
+
+    OAuth2-сервер может не отдавать refresh_token в ответе, если он не
+    изменился — без этой подстраховки TokenManager не смог бы обновлять
+    access_token в дальнейшем (falls back on the submitted refresh_token).
+    """
+    aioclient_mock.post(
+        "https://rdba.rosdomofon.com/authserver-service/oauth/token",
+        json={"access_token": "new_access_token", "expires_in": 3600},
+        status=200,
+    )
+
+    result = await _start_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "token"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"refresh_token": "existing_refresh_token"}
+    )
+
+    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
+    assert result["data"]["token_data"]["refresh_token"] == "existing_refresh_token"
+
+
+async def test_token_step_response_without_expires_in(hass: HomeAssistant, aioclient_mock):
+    """Ответ 200 без expires_in считается ошибкой, а не пустым успехом.
+
+    Без expires_in TokenManager._is_expired() упал бы с KeyError сразу
+    при настройке записи.
+    """
+    aioclient_mock.post(
+        "https://rdba.rosdomofon.com/authserver-service/oauth/token",
+        json={"access_token": "new_access_token", "refresh_token": "new_refresh_token"},
+        status=200,
+    )
+
+    result = await _start_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "token"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"refresh_token": "some_token"}
+    )
+
+    assert result["step_id"] == "token"
+    assert result["errors"]["base"] == "invalid_refresh_token"
+
+
+async def test_token_step_response_without_access_token(hass: HomeAssistant, aioclient_mock):
+    """Ответ 200 без access_token считается ошибкой, а не пустым успехом."""
+    aioclient_mock.post(
+        "https://rdba.rosdomofon.com/authserver-service/oauth/token",
+        json={},
+        status=200,
+    )
+
+    result = await _start_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "token"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"refresh_token": "some_token"}
+    )
+
+    assert result["step_id"] == "token"
+    assert result["errors"]["base"] == "invalid_refresh_token"
 
 
 async def test_token_step_invalid_refresh_token(hass: HomeAssistant, aioclient_mock):
