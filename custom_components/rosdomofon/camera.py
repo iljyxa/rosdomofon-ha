@@ -30,6 +30,15 @@ from .stream_grabber import StreamGrabber
 
 _LOGGER = logging.getLogger(__name__)
 
+# URL, подписанный здесь, попадает в Stream из homeassistant.components.stream
+# (см. camera.async_create_stream: source запрашивается один раз и кэшируется
+# на self.stream на всё время его жизни). Воркер стрима переиспользует этот же
+# URL при каждом переподключении, поэтому короткий TTL (например, 5 минут по
+# умолчанию у HA) приводит к тому, что после истечения подписи все повторные
+# подключения получают 401, а камера помечается unavailable. Берём TTL с
+# большим запасом, чтобы подписи хватало на всё время открытого live-просмотра.
+_STREAM_SIGN_TTL = timedelta(hours=24)
+
 
 async def _sign_path_compat(hass: HomeAssistant, path: str) -> str:
     """Sign path across HA versions."""
@@ -39,9 +48,9 @@ async def _sign_path_compat(hass: HomeAssistant, path: str) -> str:
     if "http.auth" not in hass.data:
         return path
     try:
-        result = _ha_async_sign_path(hass, path)
+        result = _ha_async_sign_path(hass, path, _STREAM_SIGN_TTL)
     except TypeError:
-        result = _ha_async_sign_path(hass, path, timedelta(minutes=5))
+        result = _ha_async_sign_path(hass, path)
     except Exception as exc:
         _LOGGER.warning("Failed to sign path: %s", exc)
         return path
