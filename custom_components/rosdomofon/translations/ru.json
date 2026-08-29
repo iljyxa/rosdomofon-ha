@@ -3,6 +3,14 @@
     "step": {
       "user": {
         "title": "Росдомофон",
+        "description": "Выберите способ входа.",
+        "menu_options": {
+          "phone": "По номеру телефона (SMS)",
+          "token": "По готовому refresh_token"
+        }
+      },
+      "phone": {
+        "title": "Росдомофон",
         "description": "Введите номер телефона РФ, зарегистрированный в Росдомофон.\n\nФормат: {note}",
         "data": {
           "phone": "Номер телефона"
@@ -14,13 +22,21 @@
         "data": {
           "sms_code": "Код из SMS"
         }
+      },
+      "token": {
+        "title": "Вход по refresh_token",
+        "description": "Введите готовый refresh_token, полученный из мобильного приложения Росдомофон. Используйте этот способ, если провайдер отключил подтверждение по SMS.",
+        "data": {
+          "refresh_token": "Refresh token"
+        }
       }
     },
     "error": {
       "invalid_phone_length": "Номер должен содержать 11 цифр.",
       "invalid_phone_prefix": "Номер должен начинаться с 7 (формат 7XXXXXXXXXX).",
       "sms_failed": "Не удалось отправить SMS. Проверьте номер и попробуйте ещё раз.",
-      "invalid_code": "Неверный код из SMS. Попробуйте ещё раз."
+      "invalid_code": "Неверный код из SMS. Попробуйте ещё раз.",
+      "invalid_refresh_token": "Не удалось обменять refresh_token. Проверьте, что он введён без ошибок и ещё не истёк."
     }
   },
   "services": {
