@@ -3,6 +3,14 @@
     "step": {
       "user": {
         "title": "Rosdomofon",
+        "description": "Choose how to sign in.",
+        "menu_options": {
+          "phone": "By phone number (SMS)",
+          "token": "By an existing refresh_token"
+        }
+      },
+      "phone": {
+        "title": "Rosdomofon",
         "description": "Enter the Russian phone number registered in Rosdomofon.\n\nFormat: {note}",
         "data": {
           "phone": "Phone number"
@@ -14,13 +22,21 @@
         "data": {
           "sms_code": "SMS code"
         }
+      },
+      "token": {
+        "title": "Sign in with a refresh_token",
+        "description": "Enter a refresh_token obtained from the Rosdomofon mobile app. Use this method if your provider disabled SMS confirmation.",
+        "data": {
+          "refresh_token": "Refresh token"
+        }
       }
     },
     "error": {
       "invalid_phone_length": "Phone number must contain 11 digits.",
       "invalid_phone_prefix": "Phone number must start with 7 (format 7XXXXXXXXXX).",
       "sms_failed": "Failed to send SMS. Please check the phone number and try again.",
-      "invalid_code": "Invalid SMS code. Please try again."
+      "invalid_code": "Invalid SMS code. Please try again.",
+      "invalid_refresh_token": "Failed to exchange the refresh_token. Check that it was entered correctly and has not expired."
     }
   },
   "services": {
