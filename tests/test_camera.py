@@ -173,10 +173,10 @@ async def test_camera_image_returns_none(hass: HomeAssistant, mock_config_entry,
         assert image is None
 
 
-async def test_camera_added_to_hass_starts_grabber(
+async def test_camera_added_to_hass_creates_grabber(
     hass: HomeAssistant, mock_config_entry, mock_cameras_data, mock_camera_details
 ):
-    """При добавлении сущности запускается постоянный читатель потока."""
+    """При добавлении сущности создаётся снимальщик кадра (без фонового процесса)."""
     mock_config_entry.add_to_hass(hass)
 
     hass.data[DOMAIN] = {
@@ -202,14 +202,13 @@ async def test_camera_added_to_hass_starts_grabber(
         await camera_entity.async_added_to_hass()
 
         mock_grabber_cls.assert_called_once_with(hass, "camera.rosdomofon_camera_39167")
-        mock_grabber_instance.start.assert_called_once()
         assert camera_entity._grabber is mock_grabber_instance
 
 
-async def test_camera_will_remove_from_hass_stops_grabber(
+async def test_camera_will_remove_from_hass_clears_grabber(
     hass: HomeAssistant, mock_config_entry, mock_cameras_data, mock_camera_details
 ):
-    """При удалении сущности читатель потока останавливается и очищается."""
+    """При удалении сущности снимальщик отвязывается."""
     mock_config_entry.add_to_hass(hass)
 
     hass.data[DOMAIN] = {
@@ -228,19 +227,17 @@ async def test_camera_will_remove_from_hass_stops_grabber(
 
         camera_entity = entities[0]
         camera_entity.hass = hass
-        mock_grabber_instance = MagicMock(async_stop=AsyncMock())
-        camera_entity._grabber = mock_grabber_instance
+        camera_entity._grabber = MagicMock()
 
         await camera_entity.async_will_remove_from_hass()
 
-        mock_grabber_instance.async_stop.assert_awaited_once()
         assert camera_entity._grabber is None
 
 
 async def test_camera_will_remove_from_hass_without_grabber_does_not_raise(
     hass: HomeAssistant, mock_config_entry, mock_cameras_data, mock_camera_details
 ):
-    """Удаление сущности без запущенного читателя (не дошло до added_to_hass)."""
+    """Удаление сущности без созданного снимальщика (не дошло до added_to_hass)."""
     mock_config_entry.add_to_hass(hass)
 
     hass.data[DOMAIN] = {
@@ -263,10 +260,10 @@ async def test_camera_will_remove_from_hass_without_grabber_does_not_raise(
         await camera_entity.async_will_remove_from_hass()  # не должно падать
 
 
-async def test_camera_image_returns_latest_frame_from_grabber(
+async def test_camera_image_returns_frame_from_grabber(
     hass: HomeAssistant, mock_config_entry, mock_cameras_data, mock_camera_details
 ):
-    """async_camera_image отдаёт последний кадр из читателя потока."""
+    """async_camera_image отдаёт кадр, полученный от снимальщика."""
     mock_config_entry.add_to_hass(hass)
 
     hass.data[DOMAIN] = {
@@ -285,17 +282,17 @@ async def test_camera_image_returns_latest_frame_from_grabber(
 
         camera_entity = entities[0]
         camera_entity.hass = hass
-        camera_entity._grabber = MagicMock(latest_frame=MagicMock(return_value=b"jpeg-bytes"))
+        camera_entity._grabber = MagicMock(async_get_frame=AsyncMock(return_value=b"jpeg-bytes"))
 
         image = await camera_entity.async_camera_image()
 
         assert image == b"jpeg-bytes"
 
 
-async def test_camera_image_none_when_grabber_has_no_fresh_frame(
+async def test_camera_image_none_when_grabber_capture_fails(
     hass: HomeAssistant, mock_config_entry, mock_cameras_data, mock_camera_details
 ):
-    """Читатель запущен, но кадра ещё нет/протух — снимок недоступен (None)."""
+    """Снимальщик создан, но захват не удался (и кэша нет) — None."""
     mock_config_entry.add_to_hass(hass)
 
     hass.data[DOMAIN] = {
@@ -314,7 +311,7 @@ async def test_camera_image_none_when_grabber_has_no_fresh_frame(
 
         camera_entity = entities[0]
         camera_entity.hass = hass
-        camera_entity._grabber = MagicMock(latest_frame=MagicMock(return_value=None))
+        camera_entity._grabber = MagicMock(async_get_frame=AsyncMock(return_value=None))
 
         image = await camera_entity.async_camera_image()
 

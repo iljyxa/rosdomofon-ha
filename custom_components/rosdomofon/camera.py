@@ -148,30 +148,27 @@ class RosdomofonCamera(Camera):
         self._grabber: StreamGrabber | None = None
 
     async def async_added_to_hass(self) -> None:
-        """Запускает постоянный читатель потока камеры (свежие снимки)."""
+        """Создаёт снимальщик кадра камеры (без фонового процесса)."""
         await super().async_added_to_hass()
         self._grabber = StreamGrabber(self.hass, self.entity_id)
-        self._grabber.start()
 
     async def async_will_remove_from_hass(self) -> None:
-        """Останавливает читатель потока при удалении сущности."""
-        if self._grabber is not None:
-            await self._grabber.async_stop()
-            self._grabber = None
+        """Отключает снимальщик при удалении сущности."""
+        self._grabber = None
         await super().async_will_remove_from_hass()
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
-        """Возвращает последний кадр из постоянного читателя потока.
+        """Возвращает снимок камеры — короткий ffmpeg-захват по требованию с кэшем.
 
-        None, если читатель ещё не запущен (сущность только добавляется) или
-        поток завис/недоступен — в этом случае HA сам попробует получить кадр
-        через stream_source() при необходимости.
+        None, если снимальщик ещё не создан (сущность только добавляется) или
+        захват не удался — в этом случае HA сам попробует получить кадр через
+        stream_source() при необходимости.
         """
         if self._grabber is None:
             return None
-        return self._grabber.latest_frame()
+        return await self._grabber.async_get_frame()
 
     async def stream_source(self) -> str | None:
         """Возвращает URL HLS потока через прокси с авторизацией."""
