@@ -26,8 +26,18 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.network import get_url
 
 from .const import CAMERAS_LIST_URL, CAMERA_DETAILS_URL, DOMAIN
+from .stream_grabber import StreamGrabber
 
 _LOGGER = logging.getLogger(__name__)
+
+# URL, подписанный здесь, попадает в Stream из homeassistant.components.stream
+# (см. camera.async_create_stream: source запрашивается один раз и кэшируется
+# на self.stream на всё время его жизни). Воркер стрима переиспользует этот же
+# URL при каждом переподключении, поэтому короткий TTL (например, 5 минут по
+# умолчанию у HA) приводит к тому, что после истечения подписи все повторные
+# подключения получают 401, а камера помечается unavailable. Берём TTL с
+# большим запасом, чтобы подписи хватало на всё время открытого live-просмотра.
+_STREAM_SIGN_TTL = timedelta(hours=24)
 
 
 async def _sign_path_compat(hass: HomeAssistant, path: str) -> str:
@@ -38,9 +48,9 @@ async def _sign_path_compat(hass: HomeAssistant, path: str) -> str:
     if "http.auth" not in hass.data:
         return path
     try:
-        result = _ha_async_sign_path(hass, path)
+        result = _ha_async_sign_path(hass, path, _STREAM_SIGN_TTL)
     except TypeError:
-        result = _ha_async_sign_path(hass, path, timedelta(minutes=5))
+        result = _ha_async_sign_path(hass, path)
     except Exception as exc:
         _LOGGER.warning("Failed to sign path: %s", exc)
         return path
@@ -144,11 +154,47 @@ class RosdomofonCamera(Camera):
         self._attr_supported_features = CameraEntityFeature.STREAM
         self._attr_brand = "Росдомофон"
         self._attr_model = camera_data.get("model", "Unknown")
+        self._grabber: StreamGrabber | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Создаёт снимальщик кадра камеры и прогревает его кэш в фоне."""
+        await super().async_added_to_hass()
+        self._grabber = StreamGrabber(self.hass, self.entity_id)
+        # Первый реальный запрос снимка (карточка на дашборде и т.п.) обычно
+        # приходит почти сразу после того, как сущность добавлена, и без
+        # прогрева упирается в полную задержку захвата (запуск ffmpeg + HLS
+        # плейлист/сегмент через прокси). Запускаем один прогревочный захват
+        # в фоне, не блокируя добавление сущности — если к моменту реального
+        # запроса он уже завершится, тот попадёт в тёплый кэш.
+        self.hass.async_create_task(self._async_warm_up_grabber())
+
+    async def _async_warm_up_grabber(self) -> None:
+        """Прогревочный захват снимка в фоне — ошибки не должны быть видны нигде, кроме debug-лога грабера."""
+        grabber = self._grabber
+        if grabber is None:
+            return
+        try:
+            await grabber.async_get_frame()
+        except Exception:  # noqa: BLE001 — прогрев best-effort, не должен ронять setup
+            _LOGGER.debug("Прогрев снимка для камеры %s не удался", self.entity_id, exc_info=True)
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Отключает снимальщик при удалении сущности."""
+        self._grabber = None
+        await super().async_will_remove_from_hass()
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
-        return None
+        """Возвращает снимок камеры — короткий ffmpeg-захват по требованию с кэшем.
+
+        None, если снимальщик ещё не создан (сущность только добавляется) или
+        захват не удался — в этом случае HA сам попробует получить кадр через
+        stream_source() при необходимости.
+        """
+        if self._grabber is None:
+            return None
+        return await self._grabber.async_get_frame()
 
     async def stream_source(self) -> str | None:
         """Возвращает URL HLS потока через прокси с авторизацией."""

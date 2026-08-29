@@ -107,7 +107,12 @@ async def _validate_signed_request_compat(hass: HomeAssistant, request: web.Requ
             _LOGGER.warning("Signed-path validation failed: %s", exc)
             return False
 
-    _LOGGER.warning("Signed-path validation is unavailable; rejecting stream proxy request.")
+    # request[KEY_AUTHENTICATED] уже отражает результат реальной проверки
+    # подписи, которую HA выполняет в auth_middleware (async_validate_signed_request
+    # там — вложенная функция, её нельзя импортировать напрямую, поэтому попытки
+    # выше всегда безуспешны на любой версии HA). Если мы здесь — HA сам счёл
+    # подпись отсутствующей/недействительной/просроченной; подробности запроса
+    # логирует вызывающий код (get()).
     return False
 
 
@@ -128,7 +133,7 @@ class RosdomofonStreamProxyView(HomeAssistantView):
         """Проксирует GET запросы к HLS потоку."""
         if not await _validate_signed_request_compat(self.hass, request):
             _LOGGER.warning(
-                "Неверная подпись для запроса: %s",
+                "Подпись отсутствует, недействительна или истекла — запрос отклонён: %s",
                 request.path_qs,
             )
             return web.Response(status=401, text="Invalid signature")
