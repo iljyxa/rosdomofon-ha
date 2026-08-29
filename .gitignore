@@ -19,6 +19,11 @@ dist/
 # Logs
 *.log
 
+# Test / coverage artifacts
+.coverage
+.pytest_cache/
+htmlcov/
+
 # OS files
 .DS_Store
 Thumbs.db
