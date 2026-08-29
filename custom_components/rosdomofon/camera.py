@@ -157,9 +157,26 @@ class RosdomofonCamera(Camera):
         self._grabber: StreamGrabber | None = None
 
     async def async_added_to_hass(self) -> None:
-        """Создаёт снимальщик кадра камеры (без фонового процесса)."""
+        """Создаёт снимальщик кадра камеры и прогревает его кэш в фоне."""
         await super().async_added_to_hass()
         self._grabber = StreamGrabber(self.hass, self.entity_id)
+        # Первый реальный запрос снимка (карточка на дашборде и т.п.) обычно
+        # приходит почти сразу после того, как сущность добавлена, и без
+        # прогрева упирается в полную задержку захвата (запуск ffmpeg + HLS
+        # плейлист/сегмент через прокси). Запускаем один прогревочный захват
+        # в фоне, не блокируя добавление сущности — если к моменту реального
+        # запроса он уже завершится, тот попадёт в тёплый кэш.
+        self.hass.async_create_task(self._async_warm_up_grabber())
+
+    async def _async_warm_up_grabber(self) -> None:
+        """Прогревочный захват снимка в фоне — ошибки не должны быть видны нигде, кроме debug-лога грабера."""
+        grabber = self._grabber
+        if grabber is None:
+            return
+        try:
+            await grabber.async_get_frame()
+        except Exception:  # noqa: BLE001 — прогрев best-effort, не должен ронять setup
+            _LOGGER.debug("Прогрев снимка для камеры %s не удался", self.entity_id, exc_info=True)
 
     async def async_will_remove_from_hass(self) -> None:
         """Отключает снимальщик при удалении сущности."""

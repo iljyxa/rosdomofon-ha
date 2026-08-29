@@ -171,7 +171,26 @@ class StreamGrabber:
             )
             return None
 
-        args = [binary, "-nostdin", "-hide_banner", "-loglevel", "error"]
+        args = [
+            binary,
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            # По умолчанию ffmpeg ждёт до 5 с/5 МБ входных данных, чтобы
+            # определить параметры потока (analyzeduration/probesize), прежде
+            # чем начать декодирование — заметная часть задержки первого
+            # снимка. Формат (H.264 в MPEG-TS внутри HLS-сегмента) нам и так
+            # известен заранее, поэтому режем оба лимита с большим запасом
+            # относительно одного сегмента, не рискуя не успеть увидеть
+            # видеодорожку.
+            "-fflags",
+            "nobuffer",
+            "-analyzeduration",
+            "1000000",
+            "-probesize",
+            "500000",
+        ]
         parsed_source = urlsplit(source)
         if parsed_source.scheme == "https" and parsed_source.hostname in (
             "127.0.0.1",

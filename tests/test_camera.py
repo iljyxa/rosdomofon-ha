@@ -199,10 +199,84 @@ async def test_camera_added_to_hass_creates_grabber(
         camera_entity.entity_id = "camera.rosdomofon_camera_39167"
 
         mock_grabber_instance = mock_grabber_cls.return_value
+        mock_grabber_instance.async_get_frame = AsyncMock(return_value=b"jpeg-bytes")
         await camera_entity.async_added_to_hass()
+        await hass.async_block_till_done()
 
         mock_grabber_cls.assert_called_once_with(hass, "camera.rosdomofon_camera_39167")
         assert camera_entity._grabber is mock_grabber_instance
+
+
+async def test_camera_added_to_hass_warms_up_grabber_cache(
+    hass: HomeAssistant, mock_config_entry, mock_cameras_data, mock_camera_details
+):
+    """При добавлении сущности запускается прогревочный захват снимка в фоне.
+
+    Первый реальный запрос снимка обычно приходит почти сразу после
+    добавления сущности — прогрев заранее заполняет кэш StreamGrabber,
+    чтобы этот первый запрос не упирался в полную задержку захвата.
+    """
+    mock_config_entry.add_to_hass(hass)
+
+    hass.data[DOMAIN] = {
+        mock_config_entry.entry_id: {
+            "token_manager": MagicMock(ensure_valid_token=AsyncMock(return_value=True), access_token="test_token")
+        }
+    }
+
+    with patch("custom_components.rosdomofon.camera._fetch_cameras", return_value=mock_cameras_data), \
+         patch("custom_components.rosdomofon.camera._fetch_camera_details", return_value=mock_camera_details), \
+         patch("custom_components.rosdomofon.camera.StreamGrabber") as mock_grabber_cls:
+
+        from custom_components.rosdomofon.camera import async_setup_entry
+
+        entities = []
+        await async_setup_entry(hass, mock_config_entry, lambda e: entities.extend(e))
+
+        camera_entity = entities[0]
+        camera_entity.hass = hass
+        camera_entity.entity_id = "camera.rosdomofon_camera_39167"
+
+        mock_grabber_instance = mock_grabber_cls.return_value
+        mock_grabber_instance.async_get_frame = AsyncMock(return_value=b"jpeg-bytes")
+
+        await camera_entity.async_added_to_hass()
+        await hass.async_block_till_done()
+
+        mock_grabber_instance.async_get_frame.assert_awaited_once()
+
+
+async def test_camera_warm_up_failure_does_not_raise(
+    hass: HomeAssistant, mock_config_entry, mock_cameras_data, mock_camera_details
+):
+    """Ошибка прогревочного захвата не должна ронять фоновую задачу HA."""
+    mock_config_entry.add_to_hass(hass)
+
+    hass.data[DOMAIN] = {
+        mock_config_entry.entry_id: {
+            "token_manager": MagicMock(ensure_valid_token=AsyncMock(return_value=True), access_token="test_token")
+        }
+    }
+
+    with patch("custom_components.rosdomofon.camera._fetch_cameras", return_value=mock_cameras_data), \
+         patch("custom_components.rosdomofon.camera._fetch_camera_details", return_value=mock_camera_details), \
+         patch("custom_components.rosdomofon.camera.StreamGrabber") as mock_grabber_cls:
+
+        from custom_components.rosdomofon.camera import async_setup_entry
+
+        entities = []
+        await async_setup_entry(hass, mock_config_entry, lambda e: entities.extend(e))
+
+        camera_entity = entities[0]
+        camera_entity.hass = hass
+        camera_entity.entity_id = "camera.rosdomofon_camera_39167"
+
+        mock_grabber_instance = mock_grabber_cls.return_value
+        mock_grabber_instance.async_get_frame = AsyncMock(side_effect=RuntimeError("boom"))
+
+        await camera_entity.async_added_to_hass()
+        # Не должно поднять исключение наружу и не должно оставить незавершённых задач.
+        await hass.async_block_till_done()
 
 
 async def test_camera_will_remove_from_hass_clears_grabber(

@@ -279,6 +279,36 @@ async def test_capture_one_frame_success():
 
 
 @pytest.mark.asyncio
+async def test_capture_one_frame_limits_analyzeduration_and_probesize():
+    """Урезаем analyzeduration/probesize — не ждём дефолтные 5с/5МБ на анализ."""
+    grabber, _hass = _make_grabber()
+    captured = {}
+
+    fake_proc = MagicMock()
+    fake_proc.returncode = 0
+    fake_proc.communicate = AsyncMock(return_value=(b"jpeg-bytes", b""))
+
+    async def fake_create_subprocess_exec(*args, **_kwargs):
+        captured["args"] = args
+        return fake_proc
+
+    fake_ffmpeg_module = types.SimpleNamespace(
+        get_ffmpeg_manager=lambda _hass: MagicMock(binary="ffmpeg")
+    )
+
+    with patch.object(grabber, "_resolve_source", AsyncMock(return_value="http://127.0.0.1:8123/x")), \
+         patch("asyncio.create_subprocess_exec", fake_create_subprocess_exec), \
+         patch.dict(sys.modules, {"homeassistant.components.ffmpeg": fake_ffmpeg_module}):
+        await grabber._capture_one_frame()
+
+    args = captured["args"]
+    assert "-analyzeduration" in args
+    assert "-probesize" in args
+    assert "-fflags" in args
+    assert "nobuffer" in args
+
+
+@pytest.mark.asyncio
 async def test_capture_one_frame_adds_tls_verify_for_local_https_source():
     """HTTPS на 127.0.0.1/localhost — добавляется -tls_verify 0."""
     grabber, _hass = _make_grabber()
