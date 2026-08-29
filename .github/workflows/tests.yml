@@ -62,12 +62,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ "${{ matrix.ha-version }}" = "latest" ]; then
-            pip install pytest-homeassistant-custom-component homeassistant
+            pip install pytest-homeassistant-custom-component homeassistant ha-ffmpeg
           else
             pip install \
               "pytest-homeassistant-custom-component==${{ matrix.phacc-version }}" \
               "homeassistant==${{ matrix.ha-version }}" \
-              "aiohttp-cors==0.7.0"
+              "aiohttp-cors==0.7.0" \
+              "ha-ffmpeg==3.1.0"
           fi
 
       - name: Run tests
