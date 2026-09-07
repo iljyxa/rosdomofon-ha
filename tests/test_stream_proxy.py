@@ -126,23 +126,50 @@ async def test_stream_proxy_rewrites_playlist_urls_with_queries(hass: HomeAssist
 
 @pytest.mark.asyncio
 async def test_stream_proxy_signs_rewritten_playlist_urls(hass: HomeAssistant):
-    """Переписанные HLS URI должны подписываться для последующих запросов."""
-    hass.data["http.auth"] = object()
+    """Переписанные HLS URI должны нормализоваться и подписываться."""
     view = RosdomofonStreamProxyView(hass)
 
-    with patch(
-        "custom_components.rosdomofon.stream_proxy._ha_async_sign_path",
-        side_effect=lambda _hass, path, *_args: f"{path}&authSig=test"
-        if "?" in path
-        else f"{path}?authSig=test",
-    ):
-        content = await view._rewrite_playlist_urls(
-            "#EXTM3U\n../dllive/39167/088307.ts",
-            "39167",
-            "s.rdva68.rosdomofon.com",
-            "dllive/39167/index.m3u8",
-        )
+    content = await view._rewrite_playlist_urls(
+        "#EXTM3U\n../dllive/39167/088307.ts",
+        "39167",
+        "s.rdva68.rosdomofon.com",
+        "dllive/39167/index.m3u8",
+    )
 
     assert "/api/rosdomofon/stream/39167/s.rdva68.rosdomofon.com/dllive/39167/088307.ts" in content
     assert "../" not in content
-    assert "authSig=test" in content
+    assert "sig=" in content
+
+
+def test_sign_and_validate_roundtrip(hass: HomeAssistant):
+    """Путь, подписанный sign_proxy_path, должен успешно проходить проверку."""
+    from custom_components.rosdomofon.stream_proxy import (
+        _validate_proxy_request,
+        sign_proxy_path,
+    )
+
+    path = "/api/rosdomofon/stream/39167/s.rdva68.rosdomofon.com/live/39167.m3u8"
+    signed = sign_proxy_path(hass, path)
+    sig = signed.split("sig=", 1)[1]
+
+    request = MagicMock()
+    request.get.return_value = False
+    request.query = {"sig": sig}
+    request.path = path
+
+    assert _validate_proxy_request(hass, request) is True
+
+
+def test_validate_rejects_missing_or_wrong_signature(hass: HomeAssistant):
+    """Отсутствующая или неверная подпись отклоняется."""
+    from custom_components.rosdomofon.stream_proxy import _validate_proxy_request
+
+    path = "/api/rosdomofon/stream/39167/s.rdva68.rosdomofon.com/live/39167.m3u8"
+
+    no_sig = MagicMock(path=path, query={})
+    no_sig.get.return_value = False
+    assert _validate_proxy_request(hass, no_sig) is False
+
+    wrong_sig = MagicMock(path=path, query={"sig": "deadbeef"})
+    wrong_sig.get.return_value = False
+    assert _validate_proxy_request(hass, wrong_sig) is False

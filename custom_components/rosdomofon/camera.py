@@ -4,9 +4,7 @@
 Поддерживает воспроизведение HLS потоков с авторизацией по bearer токену.
 """
 
-import inspect
 import logging
-from datetime import timedelta
 import re
 from typing import Any
 
@@ -14,53 +12,14 @@ import requests
 from homeassistant.components.camera import Camera, CameraEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-
-try:
-    from homeassistant.components.http import async_sign_path as _ha_async_sign_path
-except ImportError:
-    try:
-        from homeassistant.components.http.auth import async_sign_path as _ha_async_sign_path
-    except ImportError:
-        _ha_async_sign_path = None
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.network import get_url
 
 from .const import CAMERAS_LIST_URL, CAMERA_DETAILS_URL, DOMAIN
 from .stream_grabber import StreamGrabber
+from .stream_proxy import sign_proxy_path
 
 _LOGGER = logging.getLogger(__name__)
-
-# URL, подписанный здесь, попадает в Stream из homeassistant.components.stream
-# (см. camera.async_create_stream: source запрашивается один раз и кэшируется
-# на self.stream на всё время его жизни). Воркер стрима переиспользует этот же
-# URL при каждом переподключении, поэтому короткий TTL (например, 5 минут по
-# умолчанию у HA) приводит к тому, что после истечения подписи все повторные
-# подключения получают 401, а камера помечается unavailable. Берём TTL с
-# большим запасом, чтобы подписи хватало на всё время открытого live-просмотра.
-_STREAM_SIGN_TTL = timedelta(hours=24)
-
-
-async def _sign_path_compat(hass: HomeAssistant, path: str) -> str:
-    """Sign path across HA versions."""
-    if _ha_async_sign_path is None:
-        _LOGGER.warning("Signed-path helper unavailable; stream proxy URL will be unsigned.")
-        return path
-    if "http.auth" not in hass.data:
-        return path
-    try:
-        result = _ha_async_sign_path(hass, path, _STREAM_SIGN_TTL)
-    except TypeError:
-        result = _ha_async_sign_path(hass, path)
-    except Exception as exc:
-        _LOGGER.warning("Failed to sign path: %s", exc)
-        return path
-    if inspect.isawaitable(result):
-        try:
-            return await result
-        except Exception as exc:
-            _LOGGER.warning("Failed to sign path: %s", exc)
-            return path
-    return result
 
 
 async def async_setup_entry(
@@ -217,7 +176,7 @@ class RosdomofonCamera(Camera):
             return None
 
         proxy_path = f"/api/rosdomofon/stream/{self._camera_id}/{host}/{path}"
-        signed_path = await _sign_path_compat(self.hass, proxy_path)
+        signed_path = sign_proxy_path(self.hass, proxy_path)
         proxy_url = f"{base_url}{signed_path}"
 
         _LOGGER.debug(
