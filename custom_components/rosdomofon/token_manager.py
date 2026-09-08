@@ -8,9 +8,8 @@
 import logging
 import time
 
-import requests
-
-from .const import CLIENT_ID, GRANT_TYPE_REFRESH, TOKEN_REQUEST_URL
+from .const import CLIENT_ID, GRANT_TYPE_REFRESH
+from .oauth_client import async_request_oauth_token
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -57,9 +56,12 @@ class TokenManager:
     async def _refresh(self) -> bool:
         """Обновляет токен через refresh_token и сохраняет в config entry."""
         try:
-            new_tok = await self.hass.async_add_executor_job(
-                self._do_refresh_request
-            )
+            payload = {
+                "grant_type": GRANT_TYPE_REFRESH,
+                "client_id": CLIENT_ID,
+                "refresh_token": self._tok["refresh_token"],
+            }
+            new_tok = await async_request_oauth_token(self.hass, payload, "refresh_token")
             if new_tok is None:
                 return False
 
@@ -74,27 +76,3 @@ class TokenManager:
         except Exception as exc:
             _LOGGER.error("Ошибка обновления токена: %s", exc)
             return False
-
-    def _do_refresh_request(self) -> dict | None:
-        """Синхронный HTTP-запрос на обновление токена."""
-        data = {
-            "grant_type": GRANT_TYPE_REFRESH,
-            "client_id": CLIENT_ID,
-            "refresh_token": self._tok["refresh_token"],
-        }
-        response = requests.post(
-            TOKEN_REQUEST_URL,
-            data=data,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            timeout=10,
-        )
-        if response.status_code == 200:
-            _LOGGER.debug("Токен успешно обновлён")
-            return response.json()
-
-        _LOGGER.error(
-            "Ошибка обновления токена: %d %s",
-            response.status_code,
-            response.text,
-        )
-        return None

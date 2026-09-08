@@ -29,13 +29,10 @@ from .const import (
     PHONE_LENGTH,
     PHONE_PREFIX,
     SMS_REQUEST_URL,
-    TOKEN_REQUEST_URL,
 )
+from .oauth_client import REQUEST_TIMEOUT, async_request_oauth_token
 
 _LOGGER = logging.getLogger(__name__)
-
-# Таймаут для HTTP-запросов к API
-_REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=10)
 
 
 def _normalize_phone(raw_phone: str) -> str:
@@ -185,7 +182,7 @@ class RosdomofonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             async with session.post(
                 SMS_REQUEST_URL.format(phone=phone),
                 headers={"Content-Type": "application/json"},
-                timeout=_REQUEST_TIMEOUT,
+                timeout=REQUEST_TIMEOUT,
             ) as resp:
                 if resp.status == 200:
                     _LOGGER.debug("SMS отправлено успешно")
@@ -194,30 +191,6 @@ class RosdomofonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         except (aiohttp.ClientError, TimeoutError) as exc:
             _LOGGER.error("Ошибка запроса SMS: %s", exc)
         return False
-
-    async def _request_token(self, payload: dict, log_context: str) -> dict | None:
-        """Отправляет запрос на oauth/token и возвращает разобранный ответ."""
-        try:
-            session = aiohttp_client.async_get_clientsession(self.hass)
-            async with session.post(
-                TOKEN_REQUEST_URL,
-                data=payload,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-                timeout=_REQUEST_TIMEOUT,
-            ) as resp:
-                if resp.status == 200:
-                    _LOGGER.debug("Токен получен успешно (%s)", log_context)
-                    return await resp.json()
-                _LOGGER.error(
-                    "Ошибка получения токена (%s): %d %s",
-                    log_context,
-                    resp.status,
-                    await resp.text(),
-                )
-        except (aiohttp.ClientError, TimeoutError, ValueError) as exc:
-            # ValueError покрывает и ошибку разбора JSON в ответе (json.JSONDecodeError).
-            _LOGGER.error("Ошибка запроса токена (%s): %s", log_context, exc)
-        return None
 
     async def _get_token(self, phone: str, sms_code: str) -> dict | None:
         """Получает OAuth-токен по номеру телефона и SMS-коду."""
@@ -228,7 +201,7 @@ class RosdomofonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "sms_code": sms_code,
             "company": COMPANY_NAME,
         }
-        return await self._request_token(payload, "SMS")
+        return await async_request_oauth_token(self.hass, payload, "SMS")
 
     async def _exchange_refresh_token(self, refresh_token: str) -> dict | None:
         """Обменивает готовый refresh_token на access_token."""
@@ -237,7 +210,7 @@ class RosdomofonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "client_id": CLIENT_ID,
             "refresh_token": refresh_token,
         }
-        tok = await self._request_token(payload, "refresh_token")
+        tok = await async_request_oauth_token(self.hass, payload, "refresh_token")
         if tok is not None and not tok.get("refresh_token"):
             # OAuth2-сервер может не вернуть новый refresh_token в ответе,
             # если он не изменился — сохраняем тот, что ввёл пользователь,
